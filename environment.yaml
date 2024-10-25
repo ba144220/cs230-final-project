@@ -32,3 +32,5 @@ dependencies:
   - pip:
     # for .env file
     - python-dotenv
+    # for Supervised Fine-Tuning
+    - trl
