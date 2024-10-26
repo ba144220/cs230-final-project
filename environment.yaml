@@ -34,3 +34,4 @@ dependencies:
     - python-dotenv
     # for Supervised Fine-Tuning
     - trl
+    - peft
