@@ -1,85 +1,88 @@
-import datasets
-import re
-from trl import SFTTrainer, SFTConfig
+
+import torch
+import numpy as np
 from transformers import (
     LlamaForCausalLM, 
     PreTrainedTokenizerFast, 
     BitsAndBytesConfig, 
-    TrainerCallback
+    Seq2SeqTrainer,
+    Seq2SeqTrainingArguments
 )
-from peft import LoraConfig
-from data.load_table_datasets import TableDataset
+
+from trl import SFTTrainer, SFTConfig, DataCollatorForCompletionOnlyLM
+
+from peft import LoraConfig, get_peft_model
+from data.load_table_datasets import load_table_datasets
+
 MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
 DATASET_NAME = "self_generated"
 TABLE_EXTENSION = "csv"
+BATCH_SIZE = 4
 
 
 def main():
-    tokenizer = PreTrainedTokenizerFast.from_pretrained("meta-llama/Llama-3.2-1B-Instruct")
-    dataset = TableDataset(
+    # Load tokenizer
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(MODEL_NAME)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
+    
+    # Load dataset
+    dataset = load_table_datasets(
         dataset_path="datasets/self_generated",
         tokenizer=tokenizer,
         table_extension=TABLE_EXTENSION,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
         train_max_samples=100,
         val_max_samples=100,
         test_max_samples=100
-    ).get_dataset()
-    print(dataset)
-    print(dataset["train"])
-    print(dataset["train"][0]["text"])
-    
-    # bnb_config = BitsAndBytesConfig(
-    #     load_in_8bit=True,
-    # )
+    )
+    dataset.set_format(type="torch", columns=["input_ids", "attention_mask"])    
 
-    # model = LlamaForCausalLM.from_pretrained("meta-llama/Llama-3.2-1B-Instruct", quantization_config=bnb_config, low_cpu_mem_usage=True)
-    # # Set the padding side to left
-    # tokenizer.padding_side = "left"
-    # tokenizer.pad_token = tokenizer.eos_token
+    quantization_config = BitsAndBytesConfig(
+        load_in_8bit=True
+    )
+    model = LlamaForCausalLM.from_pretrained(MODEL_NAME, quantization_config=quantization_config, device_map="auto")
     
-    # dataset = load_table_datasets(
-    #     "datasets/self_generated", 
-    #     tokenizer,
-    #     TABLE_EXTENSION, 
-    #     shuffle=True, 
-    #     test_max_samples=100, 
-    #     val_max_samples=100, 
-    #     train_max_samples=100
-    # )
-    # print(dataset)
-    # print(dataset["train"][0])
-    # print(dataset["train"][0]["input_ids"])
+    peft_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        lora_dropout=0.05,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
     
+    
+    peft_model = get_peft_model(model, peft_config)
+    peft_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
-    # peft_config = LoraConfig(
-    #     r=16,
-    #     lora_alpha=32,
-    #     lora_dropout=0.05,
-    #     bias="none",
-    #     task_type="CAUSAL_LM",
-    # )
-    
-   
-    
-    # trainer = SFTTrainer(
-    #     model=model,
-    #     tokenizer=tokenizer,
-    #     train_dataset=dataset["train"],
-    #     eval_dataset=dataset["validation"],
-    #     peft_config=peft_config,
-    #     args=SFTConfig(
-    #         max_seq_length=2048,
-    #         dataset_text_field="question",
-    #         output_dir="../outputs",
-    #         remove_unused_columns=False,
-    #     ),
-       
-    # )
-    
-    # print(model.config)
+    training_args = Seq2SeqTrainingArguments(
+        output_dir="./outputs",
+        do_train=False,
+        do_predict=True,
+        per_device_train_batch_size=BATCH_SIZE,
+        per_device_eval_batch_size=BATCH_SIZE,
+        remove_unused_columns=True,
+        predict_with_generate=True,
+    )
+    peft_model.generation_config.max_new_tokens = 32
 
-    # results = trainer.predict(dataset["test"])
-    # print(results)
+    trainer = Seq2SeqTrainer(
+        model=peft_model,
+        tokenizer=tokenizer,
+        train_dataset=dataset["train"],
+        eval_dataset=dataset["validation"],
+        args=training_args,
+    
+    )
+
+    results = trainer.predict(
+        dataset["test"],
+    )
+    
+    predictions = np.where(results.predictions == -100, tokenizer.pad_token_id, results.predictions)
+    print(tokenizer.decode(predictions[5], skip_special_tokens=True))
+
 
 
 if __name__ == "__main__":
