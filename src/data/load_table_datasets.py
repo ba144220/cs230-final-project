@@ -3,15 +3,16 @@ import re
 import datasets
 from transformers import PreTrainedTokenizerFast
 
-SYSTEM_PROMPT = "You are a helpful assistant that can answer questions about the table."
+SYSTEM_PROMPT = "You are a helpful assistant that answers questions about the table."
 ASSISTANT_PROMPT = "Answer: "
+SHUFFLE_SEED = 42
 
 def load_table_datasets(
-    dataset_path: str, 
+    dataset_root: str, 
+    dataset_name: str, # self_generated, wtq
     tokenizer: PreTrainedTokenizerFast, 
     batch_size: int = 4,
-    table_extension: str = "html", 
-    shuffle: bool = False, 
+    table_extension: str = "html", # csv, html, tsv
     test_max_samples: int = None, 
     val_max_samples: int = None, 
     train_max_samples: int = None,
@@ -25,7 +26,6 @@ def load_table_datasets(
         dataset_path: The path to the dataset.
         tokenizer: The tokenizer to use for the dataset.
         table_extension: The extension of the table file.
-        shuffle: Whether to shuffle the dataset. Shuffling is done before selecting the maximum number of samples.
         test_max_samples: The maximum number of samples in the test set.
         val_max_samples: The maximum number of samples in the validation set.
         train_max_samples: The maximum number of samples in the train set.
@@ -36,6 +36,21 @@ def load_table_datasets(
         A dataset with the following keys: 
         "question", "answer", "context", "id", "task", "direction", "size", "table", "text"
     """
+    # Assertions
+    if dataset_name not in ["self_generated", "wtq"]:
+        raise ValueError(f"Invalid dataset name: {dataset_name}")
+    if table_extension not in ["csv", "html", "tsv"]:
+        raise ValueError(f"Invalid table extension: {table_extension}")
+    if dataset_name == "self_generated":
+        if test_max_samples is not None and test_max_samples % 80 != 0:
+            raise ValueError("The number of samples for self-generated dataset must be a multiple of 80")
+        if val_max_samples is not None and val_max_samples % 80 != 0:
+            raise ValueError("The number of samples for self-generated dataset must be a multiple of 80")
+        if train_max_samples is not None and train_max_samples % 80 != 0:
+            raise ValueError("The number of samples for self-generated dataset must be a multiple of 80")
+    
+    
+    dataset_path = os.path.join(dataset_root, dataset_name)
     def get_table(context: str):
         context = re.sub(f".csv$", "", context)
         with open(os.path.join(dataset_path, context + "." + table_extension), "r", encoding="utf-8") as f:
@@ -47,9 +62,12 @@ def load_table_datasets(
         "validation": os.path.join(dataset_path, "data", "val.csv")
     })
     
-    # Only shuffle the train set
-    if shuffle:
-        dataset["train"] = dataset["train"].shuffle(seed=42)
+    # If the dataset is wtq, shuffle the dataset
+    if dataset_name == "wtq":
+        dataset = dataset.shuffle(seed=SHUFFLE_SEED)
+    # If the dataset is self-generated, only shuffle the train set
+    if dataset_name == "self_generated":
+        dataset["train"] = dataset["train"].shuffle(seed=SHUFFLE_SEED)
         
     if test_max_samples is not None:
         dataset["test"] = dataset["test"].select(range(test_max_samples))
