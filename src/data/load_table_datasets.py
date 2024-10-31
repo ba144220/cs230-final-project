@@ -2,8 +2,8 @@ import os
 import re
 import datasets
 from transformers import PreTrainedTokenizerFast
-
-SYSTEM_PROMPT = "You are a helpful assistant that answers questions about the table."
+from typing import List
+SYSTEM_PROMPT = "You are a helpful assistant that answers questions about the table. You only answer the question right after 'Answer: '"
 ASSISTANT_PROMPT = "Answer: "
 SHUFFLE_SEED = 42
 
@@ -17,7 +17,8 @@ def load_table_datasets(
     val_max_samples: int = None, 
     train_max_samples: int = None,
     system_prompt: str = SYSTEM_PROMPT,
-    assistant_prompt: str = ASSISTANT_PROMPT
+    assistant_prompt: str = ASSISTANT_PROMPT,
+    user_prompt_order: List[str] = ["question", "table"]
 ):
     """
     Load the table datasets from the given path.
@@ -80,7 +81,7 @@ def load_table_datasets(
         table = get_table(example["context"])
         example["table"] = table
         
-        user_prompt = example["question"] + "\n" + table
+        user_prompt = "\n".join([example[col_name] for col_name in user_prompt_order])
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -88,7 +89,7 @@ def load_table_datasets(
         
         text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         text = text + assistant_prompt
-        example["text"] = text
+        example["input_string"] = text
         return example
     
     dataset = dataset.map(preprocess_single_example_to_string, batched=False)
@@ -97,7 +98,7 @@ def load_table_datasets(
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
     def tokenize_function(examples):
-        return tokenizer(examples["text"], return_tensors="pt", padding=True, truncation=True)
+        return tokenizer(examples["input_string"], return_tensors="pt", padding=True, truncation=True)
     
     dataset = dataset.map(tokenize_function, batched=True, batch_size=batch_size)
     return dataset

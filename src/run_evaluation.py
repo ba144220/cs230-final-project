@@ -16,9 +16,14 @@ from data.load_table_datasets import load_table_datasets
 
 MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
 DATASET_NAME = "self_generated"
-TABLE_EXTENSION = "csv"
-BATCH_SIZE = 4
-OUTPUT_DIR = "outputs"
+TABLE_EXTENSION = "html"
+USER_PROMPT_ORDER = ["table", "question"]
+BATCH_SIZE = 8
+OUTPUT_DIR = "./outputs"
+TRAIN_MAX_SAMPLES = 160
+VAL_MAX_SAMPLES = 160
+TEST_MAX_SAMPLES = 960
+MAX_NEW_TOKENS = 32
 
 
 def main():
@@ -34,9 +39,10 @@ def main():
         tokenizer=tokenizer,
         table_extension=TABLE_EXTENSION,
         batch_size=BATCH_SIZE,
-        train_max_samples=160,
-        val_max_samples=160,
-        test_max_samples=160
+        train_max_samples=TRAIN_MAX_SAMPLES,
+        val_max_samples=VAL_MAX_SAMPLES,
+        test_max_samples=TEST_MAX_SAMPLES,
+        user_prompt_order=USER_PROMPT_ORDER
     )
     # Copy the dataset to pt_dataset
     pt_dataset = copy.deepcopy(dataset)
@@ -60,7 +66,7 @@ def main():
     peft_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
     training_args = Seq2SeqTrainingArguments(
-        output_dir="./outputs",
+        output_dir=OUTPUT_DIR,
         do_train=False,
         do_predict=True,
         per_device_train_batch_size=BATCH_SIZE,
@@ -78,7 +84,8 @@ def main():
     )
     
     
-    peft_model.generation_config.max_new_tokens = 32
+    peft_model.generation_config.max_new_tokens = MAX_NEW_TOKENS
+    
     results = trainer.predict(
         pt_dataset["test"],
     )
@@ -90,7 +97,7 @@ def main():
     
     pred_str = tokenizer.batch_decode(predictions, skip_special_tokens=False)
     for i in range(len(pred_str)):
-        pred_str[i] = pred_str[i][len(dataset["test"][i]["text"]):]
+        pred_str[i] = pred_str[i][len(dataset["test"][i]["input_string"]):]
         # Remove the <|eot_id|> token
         pred_str[i] = re.sub(r"<\|eot_id\|>", "", pred_str[i])
     
