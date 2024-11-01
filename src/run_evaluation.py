@@ -8,41 +8,61 @@ from transformers import (
     PreTrainedTokenizerFast, 
     BitsAndBytesConfig, 
     Seq2SeqTrainer,
-    Seq2SeqTrainingArguments
+    Seq2SeqTrainingArguments,
+    HfArgumentParser
 )
 
 from peft import LoraConfig, get_peft_model
 from data.load_table_datasets import load_table_datasets
+from dataclasses import dataclass, field
+from typing import List
 
-MODEL_NAME = "meta-llama/Llama-3.2-1B-Instruct"
-DATASET_NAME = "self_generated"
-TABLE_EXTENSION = "html"
-USER_PROMPT_ORDER = ["table", "question"]
-BATCH_SIZE = 8
-OUTPUT_DIR = "./outputs"
-TRAIN_MAX_SAMPLES = 160
-VAL_MAX_SAMPLES = 160
-TEST_MAX_SAMPLES = 960
-MAX_NEW_TOKENS = 32
+@dataclass
+class EvaluationArguments:
+    model_name: str = field(default="meta-llama/Llama-3.2-1B-Instruct")
+    dataset_name: str = field(default="self_generated")
+    table_extension: str = field(default="html")
+    user_prompt_order: List[str] = field(default_factory=lambda: ["table", "question"])
+    batch_size: int = field(default=8)
+    output_dir: str = field(default="./outputs")
+    train_max_samples: int = field(default=160)
+    val_max_samples: int = field(default=160)
+    test_max_samples: int = field(default=960)
+    max_new_tokens: int = field(default=32)
 
 
-def main():
+def main():    
+    # Load parser
+    parser = HfArgumentParser(EvaluationArguments)
+    args = parser.parse_args_into_dataclasses()[0]
+
+    print(args.model_name)
+    print(args.dataset_name)
+    print(args.table_extension)
+    print(args.user_prompt_order)
+    print(args.batch_size)
+    print(args.output_dir)
+    print(args.train_max_samples)
+    print(args.val_max_samples)
+    print(args.test_max_samples)
+    print(args.max_new_tokens)
+
     # Load tokenizer
-    tokenizer = PreTrainedTokenizerFast.from_pretrained(MODEL_NAME)
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(args.model_name)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "left"
     
     # Load dataset
     dataset = load_table_datasets(
         dataset_root="datasets",
-        dataset_name=DATASET_NAME,
+        dataset_name=args.dataset_name,
         tokenizer=tokenizer,
-        table_extension=TABLE_EXTENSION,
-        batch_size=BATCH_SIZE,
-        train_max_samples=TRAIN_MAX_SAMPLES,
-        val_max_samples=VAL_MAX_SAMPLES,
-        test_max_samples=TEST_MAX_SAMPLES,
-        user_prompt_order=USER_PROMPT_ORDER
+        table_extension=args.table_extension,
+        batch_size=args.batch_size,
+        train_max_samples=args.train_max_samples,
+        val_max_samples=args.val_max_samples,
+        test_max_samples=args.test_max_samples,
+        user_prompt_order=args.user_prompt_order
     )
     # Copy the dataset to pt_dataset
     pt_dataset = copy.deepcopy(dataset)
@@ -51,7 +71,7 @@ def main():
     quantization_config = BitsAndBytesConfig(
         load_in_8bit=True
     )
-    model = LlamaForCausalLM.from_pretrained(MODEL_NAME, quantization_config=quantization_config, device_map="auto")
+    model = LlamaForCausalLM.from_pretrained(args.model_name, quantization_config=quantization_config, device_map="auto")
     
     peft_config = LoraConfig(
         r=16,
@@ -66,11 +86,11 @@ def main():
     peft_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
     training_args = Seq2SeqTrainingArguments(
-        output_dir=OUTPUT_DIR,
+        output_dir=args.output_dir,
         do_train=False,
         do_predict=True,
-        per_device_train_batch_size=BATCH_SIZE,
-        per_device_eval_batch_size=BATCH_SIZE,
+        per_device_train_batch_size=args.batch_size,
+        per_device_eval_batch_size=args.batch_size,
         remove_unused_columns=True,
         predict_with_generate=True,
     )
@@ -84,7 +104,7 @@ def main():
     )
     
     
-    peft_model.generation_config.max_new_tokens = MAX_NEW_TOKENS
+    peft_model.generation_config.max_new_tokens = args.max_new_tokens
     
     results = trainer.predict(
         pt_dataset["test"],
@@ -107,7 +127,7 @@ def main():
     # Remove the "input_ids", "attention_mask" columns
     df = df.drop(columns=["input_ids", "attention_mask"])
     df["predictions"] = pred_str
-    df.to_csv(f"{OUTPUT_DIR}/{DATASET_NAME}_eval.csv", index=False)
+    df.to_csv(f"{args.output_dir}/{args.dataset_name}_eval.csv", index=False)
     
 if __name__ == "__main__":
     main()
