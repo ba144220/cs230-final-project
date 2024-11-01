@@ -36,17 +36,6 @@ def main():
     parser = HfArgumentParser(EvaluationArguments)
     args = parser.parse_args_into_dataclasses()[0]
 
-    print(args.model_name)
-    print(args.dataset_name)
-    print(args.table_extension)
-    print(args.user_prompt_order)
-    print(args.batch_size)
-    print(args.output_dir)
-    print(args.train_max_samples)
-    print(args.val_max_samples)
-    print(args.test_max_samples)
-    print(args.max_new_tokens)
-
     # Load tokenizer
     tokenizer = PreTrainedTokenizerFast.from_pretrained(args.model_name)
     tokenizer.pad_token = tokenizer.eos_token
