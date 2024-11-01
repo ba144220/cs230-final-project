@@ -15,8 +15,6 @@ dependencies:
   - pytorch 
   - transformers
   - datasets
-  - bitsandbytes
-  - accelerate
   - sentencepiece
   # for jupyter notebook
   - jupyter
@@ -32,3 +30,5 @@ dependencies:
   - pip:
     # for .env file
     - python-dotenv
+    - bitsandbytes
+    - accelerate

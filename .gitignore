@@ -164,5 +164,8 @@ cython_debug/
 # Experiment
 /experiments/
 
+# DS_Store
+.DS_Store
+
 # Dataset
 /datasets/
