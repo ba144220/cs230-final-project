@@ -67,6 +67,90 @@ def _compute_default_rope_parameters(
     inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.int64).float().to(device) / dim))
     return inv_freq, attention_factor
 
+def _compute_2d_rope_parameters(
+    config: Optional[PretrainedConfig] = None,
+    device: Optional["torch.device"] = None,
+    **rope_kwargs,
+) -> Tuple["torch.Tensor", float]:
+    """
+    Computes the inverse frequencies according to the original RoPE implementation
+    Args:
+        config ([`~transformers.PretrainedConfig`]):
+            The model configuration.
+        device (`torch.device`):
+            The device to use for initialization of the inverse frequencies.
+        rope_kwargs (`Dict`, *optional*):
+            BC compatibility with the previous RoPE class instantiation, will be removed in v4.45.
+    Returns:
+        Tuple of (`torch.Tensor`, `float`), containing the inverse frequencies for the RoPE embeddings and the
+        post-processing scaling factor applied to the computed cos/sin (unused in this type of RoPE).
+    """
+    if config is not None and len(rope_kwargs) > 0:
+        raise ValueError(
+            "Unexpected arguments: `**rope_kwargs` and `config` are mutually exclusive in "
+            f"`_compute_default_rope_parameters`, got `rope_kwargs`={rope_kwargs} and `config`={config}"
+        )
+    if len(rope_kwargs) > 0:
+        base = rope_kwargs["base"]
+        dim = rope_kwargs["dim"]
+    elif config is not None:
+        base = config.base
+        partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
+        head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+        dim = int(head_dim * partial_rotary_factor)
+
+    attention_factor = 1.0  # Unused in this type of RoPE
+
+    # Compute the inverse frequencies
+    inv_freq = 1.0 / (base ** (2 * (torch.div(torch.arange(0, dim, 2, device=device), 2, rounding_mode='floor') / dim)))
+    return inv_freq, attention_factor
+
+def _compute_interleaved_rope_parameters(
+    config: Optional[PretrainedConfig] = None,
+    device: Optional["torch.device"] = None,
+    **rope_kwargs,
+) -> Tuple["torch.Tensor", float]:
+    """
+    Computes the inverse frequencies according to the original RoPE implementation
+    Args:
+        config ([`~transformers.PretrainedConfig`]):
+            The model configuration.
+        device (`torch.device`):
+            The device to use for initialization of the inverse frequencies.
+        rope_kwargs (`Dict`, *optional*):
+            BC compatibility with the previous RoPE class instantiation, will be removed in v4.45.
+    Returns:
+        Tuple of (`torch.Tensor`, `float`), containing the inverse frequencies for the RoPE embeddings and the
+        post-processing scaling factor applied to the computed cos/sin (unused in this type of RoPE).
+    """
+    if config is not None and len(rope_kwargs) > 0:
+        raise ValueError(
+            "Unexpected arguments: `**rope_kwargs` and `config` are mutually exclusive in "
+            f"`_compute_default_rope_parameters`, got `rope_kwargs`={rope_kwargs} and `config`={config}"
+        )
+    if len(rope_kwargs) > 0:
+        base = rope_kwargs["base"]
+        dim = rope_kwargs["dim"]
+    elif config is not None:
+        base = config.base
+        partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
+        head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+        dim = int(head_dim * partial_rotary_factor)
+        rate = getattr(config, "rate", 4)
+    
+    # Original inv_freq
+    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, device=device).float() / dim))
+    
+    # 2D inv_freq
+    inv_freq_2d = 1.0 / (base ** (2 * (torch.div(torch.arange(0, dim, 2, device=device), 2, rounding_mode='floor') / dim)))
+    
+    # Interleave frequencies
+    inv_freq_interleaved = inv_freq.clone()
+    inv_freq_interleaved[rate - 2 :: rate] = inv_freq_2d[rate - 2 :: rate]
+    inv_freq_interleaved[rate - 1 :: rate] = inv_freq_2d[rate - 1 :: rate]
+    
+    attention_factor = 1.0
+    return inv_freq_interleaved, attention_factor
 
 def _compute_linear_scaling_rope_parameters(
     config: Optional[PretrainedConfig] = None,
@@ -306,6 +390,11 @@ def _compute_longrope_parameters(
 
     return inv_freq, attention_factor
 
+INV_FREQ_FUNCTIONS = {
+    "default": _compute_default_rope_parameters,
+    "2d": _compute_2d_rope_parameters,
+    "interleaved": _compute_interleaved_rope_parameters,
+}
 
 def _compute_llama3_parameters(
     config: PretrainedConfig, device: "torch.device", seq_len: Optional[int] = None, **rope_kwargs
@@ -327,7 +416,8 @@ def _compute_llama3_parameters(
         post-processing scaling factor applied to the computed cos/sin.
     """
     # Gets the default RoPE parameters
-    inv_freq, attention_factor = _compute_default_rope_parameters(config, device, seq_len, **rope_kwargs)
+    inv_feq_function = INV_FREQ_FUNCTIONS[config.inv_freq_type]
+    inv_freq, attention_factor = inv_feq_function(config, device, seq_len, **rope_kwargs)
 
     factor = config.rope_scaling["factor"]  # `8` in the original implementation
     low_freq_factor = config.rope_scaling["low_freq_factor"]  # `1` in the original implementation

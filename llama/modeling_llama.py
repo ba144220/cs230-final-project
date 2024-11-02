@@ -37,7 +37,7 @@ from ...modeling_outputs import (
     SequenceClassifierOutputWithPast,
     TokenClassifierOutput,
 )
-from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS
+from modeling_rope_utils import ROPE_INIT_FUNCTIONS
 from ...modeling_utils import PreTrainedModel
 from ...processing_utils import Unpack
 from ...pytorch_utils import ALL_LAYERNORM_LAYERS
@@ -119,6 +119,10 @@ class LlamaRotaryEmbedding(nn.Module):
                 self.rope_type = "default"
             self.max_seq_len_cached = config.max_position_embeddings
             self.original_max_seq_len = config.max_position_embeddings
+            # For 2D RoPE and other variants requiring additional parameters
+            self.line_length = config.line_length
+            self.rate = config.rate
+            self.inv_freq_type = config.inv_freq_type
 
         self.config = config
         self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
@@ -150,21 +154,40 @@ class LlamaRotaryEmbedding(nn.Module):
         if "dynamic" in self.rope_type:
             self._dynamic_frequency_update(position_ids, device=x.device)
 
-        # Core RoPE block
-        inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1)
-        position_ids_expanded = position_ids[:, None, :].float()
-        # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
+        # position_ids (batch_size, seq_len)
+        # inv_freq (dim // 2)
         device_type = x.device.type
-        device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
+        device_type = device_type if device_type == "cuda" else "cpu"
+        # position_ids is a tensor of shape (batch_size, seq_len)
         with torch.autocast(device_type=device_type, enabled=False):
-            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
+            if self.rope_type == "2d":
+                print('2d')
+                line_length = self.line_length
+                # (batch_size, dim, seq_len)
+                position_ids_expanded = position_ids[:, None, :].float().repeat(1, self.inv_freq.shape[0], 1)
+                position_ids_expanded[:, 0::2, :] = position_ids_expanded[:, 0::2, :] % line_length
+                position_ids_expanded[:, 1::2, :] = position_ids_expanded[:, 1::2, :] // line_length
+            elif self.rope_type == "interleaved":
+                print('interleaved')
+                position_ids_expanded_2d = position_ids[:, None, :].float().repeat(1, self.inv_freq.shape[0], 1)
+                position_ids_expanded_2d[:, 0::2, :] = position_ids_expanded_2d[:, 0::2, :] % self.line_length
+                position_ids_expanded_2d[:, 1::2, :] = position_ids_expanded_2d[:, 1::2, :] // self.line_length
+
+                position_ids_expanded = position_ids[:, None, :].float().repeat(1, self.inv_freq.shape[0], 1)
+                position_ids_expanded[:, self.rate-2::self.rate, :] = position_ids_expanded_2d[:, self.rate-2::self.rate, :]
+                position_ids_expanded[:, self.rate-1::self.rate, :] = position_ids_expanded_2d[:, self.rate-2::self.rate, :]
+            else:
+                print('default')
+                position_ids_expanded = position_ids[:, None, :].float().repeat(1, self.inv_freq.shape[0], 1)
+   
+            inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids_expanded.shape[0], -1, position_ids_expanded.shape[2])
+            freqs = (inv_freq_expanded.float() * position_ids_expanded.float()).transpose(1, 2)
             emb = torch.cat((freqs, freqs), dim=-1)
+        
             cos = emb.cos()
             sin = emb.sin()
-
-        # Advanced RoPE types (e.g. yarn) apply a post-processing scaling factor, equivalent to scaling attention
-        cos = cos * self.attention_scaling
-        sin = sin * self.attention_scaling
+            cos = cos * self.attention_scaling
+            sin = sin * self.attention_scaling
 
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
 
