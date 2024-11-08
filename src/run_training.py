@@ -24,12 +24,12 @@ from args.args_class import (
 
 def track_run_number():
     try:
-        with open("src/args/run_number.txt", "r") as f:
+        with open("outputs/run_number.txt", "r") as f:
             run_number = int(f.read()) + 1
     except FileNotFoundError:
         run_number = 1
 
-    with open("src/args/run_number.txt", "w") as f:
+    with open("outputs/run_number.txt", "w") as f:
         f.write(str(run_number))
     return run_number
 
