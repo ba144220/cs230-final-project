@@ -2,9 +2,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 @dataclass
-class TrainArguments:
-    # Model args
-    model_name: str = field(default="meta-llama/Llama-3.2-1B-Instruct")
+class DataArguments:
     # Dataset args
     dataset_name: str = field(default="self_generated")
     table_extension: str = field(default="html")
@@ -15,6 +13,19 @@ class TrainArguments:
     val_max_samples: int = field(default=160)
     test_max_samples: int = field(default=960)
     max_new_tokens: int = field(default=32)
+
+@dataclass
+class PeftArguments:
+    r: int = field(default=16)
+    lora_alpha: int = field(default=32)
+    lora_dropout: int = field(default=0.05)
+    bias:str = field(default="none")
+    task_type:str = field(default="CAUSAL_LM")
+
+@dataclass
+class TrainArguments:
+    # Model args
+    model_name: str = field(default="meta-llama/Llama-3.2-1B-Instruct")
     # Training args
     gradient_accumulation_steps: int = field(default=1)
     per_device_train_batch_size: int = field(default=1)
