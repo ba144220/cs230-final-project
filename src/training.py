@@ -7,8 +7,7 @@ from transformers import (
 )
 
 from trl import (
-    SFTTrainer,
-    DataCollatorForCompletionOnlyLM
+    SFTTrainer
 )
 
 from peft import LoraConfig, get_peft_model
