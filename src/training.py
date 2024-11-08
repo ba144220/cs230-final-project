@@ -19,13 +19,6 @@ from args.args_class import (
     DataArguments
 )
 
-def formatting_prompts_func(dataset):
-    output_texts = []
-    for i in range(len(dataset['question'])):
-        text = f"### Question: {dataset['question'][i]}\n ### Answer: {dataset['answer'][i]}"
-        output_texts.append(text)
-    return output_texts
-
 def main():
     ################
     # ArgumentParser
@@ -38,7 +31,7 @@ def main():
 
     data_parser = HfArgumentParser(DataArguments)
     data_args = data_parser.parse_args_into_dataclasses()[0]
-    
+
     ################
     # Model init & Tokenizer
     ################    
@@ -65,8 +58,6 @@ def main():
         test_max_samples=data_args.test_max_samples,
         user_prompt_order=data_args.user_prompt_order
     )
-    response_template = " ### Answer:"
-    collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
     ################
     # Training
@@ -96,7 +87,6 @@ def main():
         train_dataset=dataset['train'],
         tokenizer=tokenizer,
         max_seq_length=train_args.max_seq_length,
-        formatting_func=formatting_prompts_func,
         args=training_args
     )
     trainer.train() 
