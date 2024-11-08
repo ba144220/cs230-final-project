@@ -26,7 +26,7 @@ def main():
     ################
     # Add json option
     
-    parser = HfArgumentParser(PeftArguments, TrainArguments, DataArguments)
+    parser = HfArgumentParser([PeftArguments, TrainArguments, DataArguments])
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         peft_args, train_args, data_args = parser.parse_json_file(json_file=sys.argv[1])
     else:
@@ -80,7 +80,7 @@ def main():
         bf16=True,
         save_total_limit=train_args.save_total_limit,
         logging_steps=train_args.logging_steps,
-        output_dir=train_args.output_dir,
+        output_dir=data_args.output_dir,
     )
     trainer = SFTTrainer(
         model,
@@ -91,7 +91,7 @@ def main():
         peft_config=peft_config
     )
     trainer.train() 
-    trainer.save_model(train_args.output_dir)
+    trainer.save_model(data_args.output_dir)
     print("Model trained successfully.")
    
 if __name__ == "__main__":
