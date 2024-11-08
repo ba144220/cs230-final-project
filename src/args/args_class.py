@@ -16,6 +16,7 @@ class TrainArguments:
     test_max_samples: int = field(default=960)
     max_new_tokens: int = field(default=32)
     # Training args
+    gradient_accumulation_steps: int = field(default=1)
     per_device_train_batch_size: int = field(default=1)
     num_train_epochs: int = field(default=30)
     learning_rate: float = field(default=2e-4)
