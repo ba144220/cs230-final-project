@@ -73,7 +73,6 @@ def main():
     peft_model.generation_config.pad_token_id = tokenizer.pad_token_id
 
     training_args = TrainingArguments(
-        gradient_accumulation_steps=train_args.gradient_accumulation_steps,
         per_device_train_batch_size=train_args.per_device_train_batch_size,
         num_train_epochs=train_args.num_train_epochs,
         learning_rate=train_args.learning_rate,
