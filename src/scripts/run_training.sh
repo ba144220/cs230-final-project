@@ -1,1 +1,1 @@
-python src/run_training.py src/args/training_args.json
+python src/run_training.py src/scripts/training_args.json

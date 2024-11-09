@@ -30,7 +30,7 @@ class TrainArguments:
     gradient_accumulation_steps: int = field(default=1)
     per_device_train_batch_size: int = field(default=1)
     num_train_epochs: int = field(default=30)
-    learning_rate: float = field(default=2e-4)
     save_total_limit: int = field(default=3)
     logging_steps: int = field(default=10)
     max_seq_length: int = field(default=2048)
+    dry_run: bool = field(default=False)
