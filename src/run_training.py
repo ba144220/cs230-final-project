@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 from datetime import datetime
 
@@ -22,22 +23,13 @@ from args.args_class import (
     DataArguments
 )
 
-def track_run_number():
-    try:
-        with open("outputs/run_number.txt", "r") as f:
-            run_number = int(f.read()) + 1
-    except FileNotFoundError:
-        run_number = 1
-
-    with open("outputs/run_number.txt", "w") as f:
-        f.write(str(run_number))
-    return run_number
-
-def get_run_file_name():
-    run_number = track_run_number()
+def generate_run_number():
+    """
+    Generate a run number in the format of run_YYYYMMDD_HHMMSS
+    """
     now = datetime.now()
-    current_time = now.strftime("%H%M%S")
-    return 'run_{0}_{1}'.format(run_number, current_time)
+    current_time = now.strftime("%Y%m%d_%H%M%S")
+    return 'run_{0}'.format(current_time)
 
 def save_training_args_to_json(training_args, output_dir, run_file_name):  
     with open('{0}/{1}_training.json'.format(output_dir, run_file_name), 'w') as fout:
@@ -52,8 +44,8 @@ def main():
         peft_args, train_args, data_args = parser.parse_json_file(json_file=sys.argv[1])
     else:
         peft_args, train_args, data_args = parser.parse_args_into_dataclasses()
-    run_file_name = get_run_file_name()
-    output_run_file_name_dir = '{0}/{1}'.format(data_args.output_dir, run_file_name)
+    run_id = generate_run_number()
+    output_dir = os.path.join(data_args.output_dir, run_id)
 
     ################
     # Model init & Tokenizer
@@ -103,7 +95,7 @@ def main():
         bf16=True,
         save_total_limit=train_args.save_total_limit,
         logging_steps=train_args.logging_steps,
-        output_dir=output_run_file_name_dir,
+        output_dir=output_dir,
     )
     trainer = SFTTrainer(
         model,
@@ -114,8 +106,7 @@ def main():
         peft_config=peft_config
     )
     trainer.train()
-    trainer.save_model(output_run_file_name_dir)
-    save_training_args_to_json(training_args, output_run_file_name_dir, run_file_name)
+    save_training_args_to_json(training_args, output_dir, run_id)
     print("Model trained successfully.")
 
 if __name__ == "__main__":
