@@ -7,7 +7,7 @@ SYSTEM_PROMPT = "You are a helpful assistant that answers questions about the ta
 ASSISTANT_PROMPT = "Answer: "
 SHUFFLE_SEED = 42
 
-def load_table_datasets(
+def load_single_dataset(
     dataset_root: str, 
     dataset_name: str, # self_generated, wtq
     tokenizer: PreTrainedTokenizerFast, 
@@ -69,7 +69,7 @@ def load_table_datasets(
     # If the dataset is self-generated, only shuffle the train set
     if dataset_name == "self_generated":
         dataset["train"] = dataset["train"].shuffle(seed=SHUFFLE_SEED)
-        
+    
     if test_max_samples is not None:
         dataset["test"] = dataset["test"].select(range(test_max_samples))
     if val_max_samples is not None:
@@ -82,24 +82,27 @@ def load_table_datasets(
         example["table"] = table
         
         user_prompt = "\n".join([example[col_name] for col_name in user_prompt_order])
+        
+        assistant_response = assistant_prompt + str(example["answer"])
+        
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
+            {"role": "assistant", "content": assistant_response}
         ]
         
         text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        text = text + assistant_prompt
         example["input_string"] = text
         return example
     
     dataset = dataset.map(preprocess_single_example_to_string, batched=False)
     
-    # Set tokenizer padding
-    tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "left"
-    def tokenize_function(examples):
-        return tokenizer(examples["input_string"], return_tensors="pt", padding=True, truncation=True)
+    # # Set tokenizer padding
+    # tokenizer.pad_token = tokenizer.eos_token
+    # tokenizer.padding_side = "left"
+    # def tokenize_function(examples):
+    #     return tokenizer(examples["input_string"], return_tensors="pt", padding=True, truncation=True)
     
-    dataset = dataset.map(tokenize_function, batched=True, batch_size=batch_size)
+    # dataset = dataset.map(tokenize_function, batched=True, batch_size=batch_size)
     return dataset
     
