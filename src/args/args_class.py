@@ -34,3 +34,5 @@ class TrainArguments:
     save_total_limit: int = field(default=3)
     logging_steps: int = field(default=10)
     max_seq_length: int = field(default=2048)
+    
+    dry_run: bool = field(default=False)

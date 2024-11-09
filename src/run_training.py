@@ -1,6 +1,6 @@
 import sys
 import os
-import json
+import wandb
 from datetime import datetime
 
 from transformers import (
@@ -22,6 +22,12 @@ from args.args_class import (
     PeftArguments,
     DataArguments
 )
+
+def wandb_init(run_id):
+    os.environ["WANDB_PROJECT"] = "table-llama"
+    os.environ["WANDB_LOG_MODEL"] = "checkpoint"
+    os.environ["WANDB_NAME"] = run_id
+    wandb.init(project="table-llama", name=run_id)
 
 def generate_run_number():
     """
@@ -46,6 +52,9 @@ def main():
         peft_args, train_args, data_args = parser.parse_args_into_dataclasses()
     run_id = generate_run_number()
     output_dir = os.path.join(data_args.output_dir, run_id)
+    
+    if not train_args.dry_run:
+        wandb_init(run_id)
 
     ################
     # Model init & Tokenizer
@@ -96,6 +105,7 @@ def main():
         save_total_limit=train_args.save_total_limit,
         logging_steps=train_args.logging_steps,
         output_dir=output_dir,
+        report_to="wandb" if not train_args.dry_run else None,
     )
     trainer = SFTTrainer(
         model,

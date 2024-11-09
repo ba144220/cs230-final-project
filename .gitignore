@@ -175,3 +175,6 @@ cython_debug/
 
 # run_number
 run_number.txt
+
+# wandb
+wandb/

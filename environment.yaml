@@ -27,6 +27,8 @@ dependencies:
   # for data generation
   - bs4
   - gdown
+  # for wandb
+  - wandb
   # pip install, put your pip packages here
   - pip
   - pip:
