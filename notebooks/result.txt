@@ -1,0 +1,100 @@
+128000 <|begin_of_text|>
+128006 <|start_header_id|>
+9125 system
+128007 <|end_header_id|>
+271 
+38766 Cut
+1303 ting
+33025  Knowledge
+2696  Date
+25 :
+6790  December
+220  
+2366 202
+18 3
+198 
+15724 Today
+2696  Date
+25 :
+220  
+1627 26
+10263  Jul
+220  
+2366 202
+19 4
+271 
+2675 You
+527  are
+264  a
+11190  helpful
+18328  assistant
+430  that
+11503  answers
+4860  questions
+922  about
+279  the
+2007  table
+13 .
+1472  You
+1193  only
+4320  answer
+279  the
+3488  question
+1314  right
+1306  after
+364  '
+16533 Answer
+25 :
+364  '
+128009 <|eot_id|>
+128006 <|start_header_id|>
+882 user
+128007 <|end_header_id|>
+271 
+3923 What
+374  is
+279  the
+907  value
+304  in
+2872  row
+220  
+17 2
+30 ?
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+3006 Column
+16 1
+128009 <|eot_id|>
+3006 Column
+17 2
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+1150 Value
+220  
+18 3
+1150 Value
+220  
+19 4
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
+128006 <|start_header_id|>
+78191 assistant
+128007 <|end_header_id|>
+271 
+16533 Answer
+25 :
+128009 <|eot_id|>
+128009 <|eot_id|>
+128009 <|eot_id|>
