@@ -1,0 +1,17 @@
+{ 
+    "model_name": "meta-llama/Llama-3.2-1B-Instruct",
+    "dataset_names": ["self_generated", "wtq"],
+    "gradient_accumulation_steps": 1,
+    "batch_size": 1,
+    "num_train_epochs": 1,
+    "save_total_limit": 3,
+    "logging_steps": 10,
+    "max_seq_length": 512,
+    "table_extension": "csv",
+    "user_prompt_order": ["table", "question"],
+    "output_dir": "./outputs",
+    "train_max_samples": 80,
+    "val_max_samples": 80,
+    "test_max_samples": 80,
+    "dry_run": false
+}
