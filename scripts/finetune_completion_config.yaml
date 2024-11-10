@@ -4,11 +4,12 @@ load_in_4bit: true
 load_in_8bit: false
 
 # Training arguments
-gradient_accumulation_steps: 1
-batch_size: 1
+gradient_accumulation_steps: 4
+batch_size: 2
 num_train_epochs: 1
 save_total_limit: 3
 logging_steps: 10
+eval_steps: 200
 max_seq_length: 1024
 dry_run: false
 
@@ -16,9 +17,9 @@ dry_run: false
 dataset_root_dir: ./datasets
 dataset_names: ["self_generated", "wtq"]
 table_extension: csv
-train_max_samples_for_each_dataset: 80
-val_max_samples_for_each_dataset: 80
-test_max_samples_for_each_dataset: 80
+train_max_samples_for_each_dataset: 800
+val_max_samples_for_each_dataset: 160
+test_max_samples_for_each_dataset: 160
 shuffle_seed: 42
 
 # Peft arguments

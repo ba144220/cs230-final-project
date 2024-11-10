@@ -21,6 +21,8 @@ from trl import SFTConfig, SFTTrainer
 
 import transformers
 
+from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
+
 transformers.logging.set_verbosity_info()
 
 SYSTEM_PROMPT = "You are a helpful assistant that answers questions about the table. You only answer the question right after 'Answer: '"
@@ -40,6 +42,7 @@ class TrainingArguments:
     num_train_epochs: int = field(default=1)
     save_total_limit: int = field(default=3)
     logging_steps: int = field(default=10)
+    eval_steps: int = field(default=200)
     max_seq_length: int = field(default=1024)
     dry_run: bool = field(default=False)
     
@@ -95,18 +98,9 @@ def load_single_dataset(
     })
     
     # Shuffle train dataset
-    if dataset_name == "wtq":
-        for split in ["train", "validation", "test"]:
-            dataset[split] = dataset[split].shuffle(seed=dataset_args.shuffle_seed)
-    
-    # Sanity check
-    if dataset_name == "self_generated":
-        if dataset_args.train_max_samples_for_each_dataset % 80 != 0:
-            print(f"train_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
-        if dataset_args.val_max_samples_for_each_dataset % 80 != 0:
-            print(f"val_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
-        if dataset_args.test_max_samples_for_each_dataset % 80 != 0:
-            print(f"test_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
+   
+    for split in ["train", "validation", "test"]:
+        dataset[split] = dataset[split].shuffle(seed=dataset_args.shuffle_seed)
     
     # Limit the number of samples
     if dataset_args.train_max_samples_for_each_dataset != -1:
@@ -115,7 +109,7 @@ def load_single_dataset(
         dataset["validation"] = dataset["validation"].select(range(dataset_args.val_max_samples_for_each_dataset))
     if dataset_args.test_max_samples_for_each_dataset != -1:
         dataset["test"] = dataset["test"].select(range(dataset_args.test_max_samples_for_each_dataset))
-    
+
     # Get the table 
     def get_table(example: Dict[str, Any]):
         context = re.sub(f".csv$", "", example["context"])
@@ -137,52 +131,7 @@ def generate_run_id(is_dry_run: bool):
     current_time = now.strftime("%Y%m%d_%H%M%S")
     return 'run_{0}'.format(current_time) if not is_dry_run else "dry_run"
 
-class DataCollatorForAssistantCompletionOnly():
-    def __init__(
-        self, 
-        tokenizer: PreTrainedTokenizerFast,
-        max_seq_length: int,
-        system_prompt: str = SYSTEM_PROMPT,
-        assistant_prefix: str = ASSISTANT_PREFIX,
-        end_header_id: int = 128007,
-    ):
-        self.tokenizer = tokenizer
-        self.max_seq_length = max_seq_length
-        self.end_header_id = end_header_id
-        self.system_prompt = system_prompt
-        self.assistant_prefix = assistant_prefix
     
-    def __call__(self, examples: List[Dict[str, Any]]):
-        """
-        Columns: question, answer, context, id, task, direction, size, table
-        Only use question, table, and answer
-        """
-        text_list = []
-        for example in examples:
-            user_prompt = str(example["table"]) + "\n" + str(example["question"])
-            message = [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": user_prompt},
-                {"role": "assistant", "content": self.assistant_prefix + str(example["answer"])},
-            ]
-            
-            message_string = self.tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
-            text_list.append(message_string)
-            
-        batch = self.tokenizer(
-            text_list, 
-            return_tensors="pt", 
-            padding=True, 
-            truncation=True, 
-            max_length=self.max_seq_length, 
-            add_special_tokens=False,
-        )
-        
-        batch["labels"] = batch["input_ids"].clone()
-        # Set all labels to -100
-        batch["labels"][:,:-1] = -100
-        return batch
-        
 
 def main():
     parser = HfArgumentParser((ModelArguments, DatasetArguments, TrainingArguments, PeftArguments))
@@ -242,16 +191,19 @@ def main():
         remove_unused_columns=False,
         
         eval_strategy="steps",
-        eval_steps=100,
+        eval_steps=training_args.eval_steps,
         
         dataset_kwargs={
             "skip_prepare_dataset": True,
         }
     )
     
-    collator = DataCollatorForAssistantCompletionOnly(
+    collator = DataCollatorForAssistantCompletion(
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
+        end_header_id=128007,
+        system_prompt=SYSTEM_PROMPT,
+        assistant_prefix=ASSISTANT_PREFIX,
     )
    
     # SFT trainer
