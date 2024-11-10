@@ -9,10 +9,10 @@ dataset_root_dir: ./datasets
 dataset_names: ["self_generated", "wtq"]
 table_extension: csv
 train_max_samples_for_each_dataset: 80
-val_max_samples_for_each_dataset: 80
-test_max_samples_for_each_dataset: 80
+val_max_samples_for_each_dataset: 480
+test_max_samples_for_each_dataset: 480
 shuffle_seed: 42
 
 # Training arguments
-batch_size: 1
+batch_size: 8
 max_seq_length: 1024
