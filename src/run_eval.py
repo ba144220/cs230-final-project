@@ -1,4 +1,6 @@
 import sys
+import os
+from datetime import datetime
 from tqdm import tqdm
 from transformers import (
     HfArgumentParser, 
@@ -9,7 +11,7 @@ from transformers import (
 import torch
 from torch.utils.data.dataloader import DataLoader
 
-from parsers.argument_classes import DatasetArguments, ModelArguments, TrainingArguments
+from parsers.argument_classes import DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments
 from utils.datasets_loader import load_datasets
 from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
 
@@ -59,6 +61,7 @@ def main():
     )
     
     # Predict
+    
     predictions = []
     for idx, batch in tqdm(enumerate(pred_dataloader)):
         with torch.no_grad():
@@ -71,10 +74,19 @@ def main():
                 top_p=generation_args.top_p,
             )
             output_strings = tokenizer.batch_decode(outputs[:, input_length:], skip_special_tokens=False)
-            print(output_strings, datasets["test"][idx]["answer"])
             predictions.extend(output_strings)
     
-    print(predictions)
+    # Create a new column for predictions
+    df = datasets["test"].to_pandas()
+    df["predictions"] = predictions
+    # Save it to the adapter path
+    if model_args.adapter_path:
+        output_path = os.path.join(model_args.adapter_path, f"predictions.csv")
+    else:
+        output_path = os.path.join(training_args.output_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_eval.csv")
+        
+    df.to_csv(output_path, index=False)
+        
     
 
 if __name__ == "__main__":
