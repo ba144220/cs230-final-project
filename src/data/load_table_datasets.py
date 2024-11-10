@@ -24,7 +24,7 @@ class TableDatasetLoader:
         assistant_prompt: str = ASSISTANT_PROMPT,
         user_prompt_order: List[str] = ["question", "table"],
         grid_it: bool = False,
-        line_length: int = 32,
+        line_length: int = 10,
         skip_validation: bool = False
     ):
         # Initialize instance variables with given parameters
@@ -51,15 +51,14 @@ class TableDatasetLoader:
             "tsv": "\t"
         }
 
-
         # Validate the input parameters
         if not skip_validation:
             self._validate_inputs()
-        # Set the path to the dataset directory
         if self.grid_it:
             new_tokens = [self.start_of_line_token, self.end_of_line_token, self.table_cell_separator_token]
             self.tokenizer.add_tokens(new_tokens)
             # TODO: model.resize_token_embeddings(len(tokenizer))
+        # Set the path to the dataset directory 
         self.dataset_path = os.path.join(self.dataset_root, self.dataset_name)
 
     def _validate_inputs(self):
@@ -79,6 +78,11 @@ class TableDatasetLoader:
                 raise ValueError("The number of samples for self-generated dataset must be a multiple of 80")
 
     def _get_table(self, context: str):
+        context = re.sub(f".csv$", "", context)
+        with open(os.path.join(self.dataset_path, context + "." + self.table_extension), "r", encoding="utf-8") as f:
+            return f.read()
+    
+    def _get_table_with_grid(self, context: str):
         # Remove .csv extension from the context if present
         context = re.sub(r"\.csv$", "", context)
         separator = self.extension_separator_map[self.table_extension]
@@ -110,7 +114,25 @@ class TableDatasetLoader:
         text = text + self.assistant_prompt
         example["input_string"] = text
         return example
-    
+
+    def _preprocess_single_example_to_string_with_grid(self, example):
+        # Retrieve the table content based on the context provided in the example
+        table = self._get_table_with_grid(example["context"])
+        example["table"] = table
+
+        # Construct the user prompt using the specified order of fields
+        user_prompt = "\n".join([example[col_name] for col_name in self.user_prompt_order if col_name in example])
+        # Create the system and user messages for the chat template
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        # Apply the chat template to create the input string
+        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        example["input_ids"] = self._grid_it(text)
+        return example
+
     def _grid_it(self, text):
         # Seperate the text into before_table, table, and after_table
         table_pattern = r"(\[START_OF_LINE\].*?\[END_OF_LINE\](?:\n\[START_OF_LINE\].*?\[END_OF_LINE\])*)"
@@ -202,11 +224,28 @@ class TableDatasetLoader:
         # for i in result:
         #     print(i, self.tokenizer.decode(i))
         # print(result)
-        return self.tokenizer.decode(result)
+        return result
 
     def _tokenize_function(self, examples):
         # Tokenize the input strings with padding and truncation
+        print(examples)
         return self.tokenizer(examples["input_string"], padding=True, truncation=True)
+    
+
+    def _batch_grid_data(self, examples):
+        # Tokenize the input strings with padding and truncation
+        max_length = 0
+        for ids in examples["input_ids"]:
+            if len(ids) > max_length:
+                max_length = len(ids)
+
+        for i in range(len(examples["input_ids"])):
+            if len(examples["input_ids"][i]) < max_length:
+                examples["input_ids"][i] = [self.tokenizer.pad_token_id] * (max_length - len(examples["input_ids"][i])) + examples["input_ids"][i]
+
+        examples["attention_mask"] = [[1] * max_length] * len(examples["input_ids"])
+        return examples
+    
 
     def load(self):
         # Load the dataset from CSV files
@@ -230,16 +269,20 @@ class TableDatasetLoader:
         if self.train_max_samples is not None:
             dataset["train"] = dataset["train"].select(range(self.train_max_samples))
 
-        # Preprocess each example to generate input strings
-        dataset = dataset.map(self._preprocess_single_example_to_string, batched=False)
-
         # Set tokenizer padding and padding side
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "left"
 
-        # Tokenize the dataset
-        dataset = dataset.map(self._tokenize_function, batched=True, batch_size=self.batch_size)
+        # Preprocess each example to generate input strings
+        if self.grid_it:
+            dataset = dataset.map(self._preprocess_single_example_to_string_with_grid, batched=False)
+            dataset = dataset.map(self._batch_grid_data, batched=True, batch_size=self.batch_size)
+        else:
+            dataset = dataset.map(self._preprocess_single_example_to_string, batched=False)
+            dataset = dataset.map(self._tokenize_function, batched=True, batch_size=self.batch_size)
+
         return dataset
+
 
 if __name__ == "__main__":
     tokenizer = PreTrainedTokenizerFast.from_pretrained("meta-llama/Llama-3.2-1B-Instruct", token='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')
