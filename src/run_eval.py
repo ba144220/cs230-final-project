@@ -14,11 +14,11 @@ from utils.datasets_loader import load_datasets
 from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
 
 def main():
-    parser = HfArgumentParser((DatasetArguments, ModelArguments, TrainingArguments))
+    parser = HfArgumentParser((DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".yaml"):
-        dataset_args, model_args, training_args = parser.parse_yaml_file(sys.argv[1])
+        dataset_args, model_args, training_args, generation_args = parser.parse_yaml_file(sys.argv[1])
     else:
-        dataset_args, model_args, training_args = parser.parse_args_into_dataclasses()
+        dataset_args, model_args, training_args, generation_args = parser.parse_args_into_dataclasses()
         
     # Tokenizer
     tokenizer = PreTrainedTokenizerFast.from_pretrained(model_args.model_name)
@@ -63,7 +63,13 @@ def main():
     for idx, batch in tqdm(enumerate(pred_dataloader)):
         with torch.no_grad():
             input_length = batch["input_ids"].size(1)
-            outputs = model.generate(**batch, max_new_tokens=100)
+            outputs = model.generate(
+                **batch, 
+                max_new_tokens=generation_args.max_new_tokens,
+                do_sample=generation_args.do_sample,
+                top_k=generation_args.top_k,
+                top_p=generation_args.top_p,
+            )
             output_strings = tokenizer.batch_decode(outputs[:, input_length:], skip_special_tokens=False)
             print(output_strings, datasets["test"][idx]["answer"])
             predictions.extend(output_strings)

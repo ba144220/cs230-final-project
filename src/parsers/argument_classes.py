@@ -20,7 +20,14 @@ class TrainingArguments:
     eval_steps: int = field(default=200)
     max_seq_length: int = field(default=1024)
     dry_run: bool = field(default=False)
-    
+
+@dataclass
+class GenerationArguments:
+    max_new_tokens: int = field(default=100)
+    do_sample: bool = field(default=False)
+    top_k: int = field(default=50)
+    top_p: float = field(default=0.95)
+
 @dataclass
 class DatasetArguments:
     dataset_root_dir: str = field(default="./datasets")
