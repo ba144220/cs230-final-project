@@ -16,10 +16,9 @@ dry_run: false
 dataset_root_dir: ./datasets
 dataset_names: ["self_generated", "wtq"]
 table_extension: csv
-user_prompt_order: ["table", "question"]
-train_max_samples_for_each_dataset: 160
-val_max_samples_for_each_dataset: 160
-test_max_samples_for_each_dataset: 160
+train_max_samples_for_each_dataset: 80
+val_max_samples_for_each_dataset: 80
+test_max_samples_for_each_dataset: 80
 shuffle_seed: 42
 
 # Peft arguments

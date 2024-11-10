@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import torch
+import shutil
 from datetime import datetime
 from typing import List, Dict, Any
 from dataclasses import dataclass, field
@@ -18,9 +19,12 @@ from transformers import (
 from peft import LoraConfig
 from trl import SFTConfig, SFTTrainer
 
-from transformers.utils import logging
+import transformers
 
-logger = logging.get_logger(__name__)
+transformers.logging.set_verbosity_info()
+
+SYSTEM_PROMPT = "You are a helpful assistant that answers questions about the table. You only answer the question right after 'Answer: '"
+ASSISTANT_PREFIX = "Answer: "
 
 @dataclass
 class ModelArguments:
@@ -44,7 +48,6 @@ class DatasetArguments:
     dataset_root_dir: str = field(default="./datasets")
     dataset_names: List[str] = field(default_factory=lambda: ["self_generated", "wtq"])
     table_extension: str = field(default="html")
-    user_prompt_order: List[str] = field(default_factory=lambda: ["table", "question"])
     train_max_samples_for_each_dataset: int = field(default=-1)
     val_max_samples_for_each_dataset: int = field(default=-1)
     test_max_samples_for_each_dataset: int = field(default=-1)
@@ -76,7 +79,6 @@ def load_datasets(
     
     return concatenated_datasets
     
-
 def load_single_dataset(
     dataset_name: str, 
     dataset_args: DatasetArguments, 
@@ -100,11 +102,11 @@ def load_single_dataset(
     # Sanity check
     if dataset_name == "self_generated":
         if dataset_args.train_max_samples_for_each_dataset % 80 != 0:
-            logging.warning(f"train_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
+            print(f"train_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
         if dataset_args.val_max_samples_for_each_dataset % 80 != 0:
-            logging.warning(f"val_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
+            print(f"val_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
         if dataset_args.test_max_samples_for_each_dataset % 80 != 0:
-            logging.warning(f"test_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
+            print(f"test_max_samples_for_each_dataset for {dataset_name} is not a multiple of 80")
     
     # Limit the number of samples
     if dataset_args.train_max_samples_for_each_dataset != -1:
@@ -135,6 +137,53 @@ def generate_run_id(is_dry_run: bool):
     current_time = now.strftime("%Y%m%d_%H%M%S")
     return 'run_{0}'.format(current_time) if not is_dry_run else "dry_run"
 
+class DataCollatorForAssistantCompletionOnly():
+    def __init__(
+        self, 
+        tokenizer: PreTrainedTokenizerFast,
+        max_seq_length: int,
+        system_prompt: str = SYSTEM_PROMPT,
+        assistant_prefix: str = ASSISTANT_PREFIX,
+        end_header_id: int = 128007,
+    ):
+        self.tokenizer = tokenizer
+        self.max_seq_length = max_seq_length
+        self.end_header_id = end_header_id
+        self.system_prompt = system_prompt
+        self.assistant_prefix = assistant_prefix
+    
+    def __call__(self, examples: List[Dict[str, Any]]):
+        """
+        Columns: question, answer, context, id, task, direction, size, table
+        Only use question, table, and answer
+        """
+        text_list = []
+        for example in examples:
+            user_prompt = str(example["table"]) + "\n" + str(example["question"])
+            message = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": self.assistant_prefix + str(example["answer"])},
+            ]
+            
+            message_string = self.tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
+            text_list.append(message_string)
+            
+        batch = self.tokenizer(
+            text_list, 
+            return_tensors="pt", 
+            padding=True, 
+            truncation=True, 
+            max_length=self.max_seq_length, 
+            add_special_tokens=False,
+        )
+        
+        batch["labels"] = batch["input_ids"].clone()
+        # Set all labels to -100
+        batch["labels"][:,:-1] = -100
+        return batch
+        
+
 def main():
     parser = HfArgumentParser((ModelArguments, DatasetArguments, TrainingArguments, PeftArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".yaml"):
@@ -157,7 +206,6 @@ def main():
         bnb_4bit_compute_dtype=torch.bfloat16 if model_args.load_in_4bit else None,
         bnb_4bit_use_double_quant=model_args.load_in_4bit,
     )
-    
     model = LlamaForCausalLM.from_pretrained(
         model_args.model_name,
         quantization_config=bnb_config if model_args.load_in_4bit or model_args.load_in_8bit else None,
@@ -191,13 +239,21 @@ def main():
         save_total_limit=training_args.save_total_limit,
         logging_steps=training_args.logging_steps,
         
-        remove_unused_columns=True,
+        remove_unused_columns=False,
         
         eval_strategy="steps",
         eval_steps=100,
         
+        dataset_kwargs={
+            "skip_prepare_dataset": True,
+        }
     )
     
+    collator = DataCollatorForAssistantCompletionOnly(
+        tokenizer=tokenizer,
+        max_seq_length=training_args.max_seq_length,
+    )
+   
     # SFT trainer
     sft_trainer = SFTTrainer(
         model=model,
@@ -206,12 +262,17 @@ def main():
         eval_dataset=datasets["validation"],
         peft_config=peft_config,
         args=sft_config,
-        # TODO: Temporary 
-        dataset_text_field="question",
+        data_collator=collator,
     )
+    
+    sft_trainer.evaluate()
     
     sft_trainer.train()
     
-
+    sft_trainer.save_model(sft_config.output_dir)
+    
+    # Copy the sys.argv[1] to the output directory
+    shutil.copy(sys.argv[1], os.path.join(sft_config.output_dir, os.path.basename(sys.argv[1])))
+    
 if __name__ == "__main__":
     main()
