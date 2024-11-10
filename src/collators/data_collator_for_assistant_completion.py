@@ -2,17 +2,21 @@ import torch
 from typing import List, Dict, Any
 from transformers import PreTrainedTokenizerFast
 
+from constants.prompts import SYSTEM_PROMPT, ASSISTANT_PREFIX
+
 class DataCollatorForAssistantCompletion():
     def __init__(
         self, 
         tokenizer: PreTrainedTokenizerFast,
         max_seq_length: int,
-        system_prompt: str,
-        assistant_prefix: str,
-        end_header_id: int,
+        is_train: bool = True,
+        system_prompt: str = SYSTEM_PROMPT,
+        assistant_prefix: str = ASSISTANT_PREFIX,
+        end_header_id: int = 128007,
     ):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
+        self.is_train = is_train
         self.end_header_id = end_header_id
         self.system_prompt = system_prompt
         self.assistant_prefix = assistant_prefix
@@ -28,10 +32,14 @@ class DataCollatorForAssistantCompletion():
             message = [
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": user_prompt},
-                {"role": "assistant", "content": self.assistant_prefix + str(example["answer"])},
+                
             ]
-            
-            message_string = self.tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=False)
+            if self.is_train:
+                message.append({"role": "assistant", "content": self.assistant_prefix + str(example["answer"])})
+            if self.is_train:
+                message_string = self.tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=False)
+            else:
+                message_string = self.tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=True)
             text_list.append(message_string)
             
         batch = self.tokenizer(
@@ -42,6 +50,9 @@ class DataCollatorForAssistantCompletion():
             max_length=self.max_seq_length, 
             add_special_tokens=False,
         )
+        
+        if not self.is_train:
+            return batch
         
         batch["labels"] = batch["input_ids"].clone()
         # Set all labels before the last occurrence of the end_header_id to -100
