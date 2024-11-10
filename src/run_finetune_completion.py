@@ -41,6 +41,7 @@ class TrainingArguments:
     batch_size: int = field(default=1)
     num_train_epochs: int = field(default=1)
     save_total_limit: int = field(default=3)
+    save_steps: int = field(default=100)
     logging_steps: int = field(default=10)
     eval_steps: int = field(default=200)
     max_seq_length: int = field(default=1024)
@@ -186,6 +187,8 @@ def main():
         
         num_train_epochs=training_args.num_train_epochs,
         save_total_limit=training_args.save_total_limit,
+        save_strategy="steps",
+        save_steps=training_args.save_steps,
         logging_steps=training_args.logging_steps,
         
         remove_unused_columns=False,

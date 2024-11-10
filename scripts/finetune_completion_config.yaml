@@ -5,11 +5,12 @@ load_in_8bit: false
 
 # Training arguments
 gradient_accumulation_steps: 4
-batch_size: 2
+batch_size: 1
 num_train_epochs: 1
 save_total_limit: 3
 logging_steps: 10
 eval_steps: 200
+save_steps: 200
 max_seq_length: 1024
 dry_run: false
 
