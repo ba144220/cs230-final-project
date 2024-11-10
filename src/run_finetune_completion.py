@@ -1,6 +1,8 @@
 import os
 import re
 import sys
+import torch
+from datetime import datetime
 from typing import List, Dict, Any
 from dataclasses import dataclass, field
 
@@ -13,13 +15,22 @@ from transformers import (
     HfArgumentParser,
 )
 
+from peft import LoraConfig
+from trl import SFTConfig, SFTTrainer
+
 from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
 @dataclass
-class TrainingArguments:
+class ModelArguments:
     model_name: str = field(default="meta-llama/Llama-3.2-1B-Instruct")
+    load_in_8bit: bool = field(default=False)
+    load_in_4bit: bool = field(default=False)
+
+@dataclass
+class TrainingArguments:
+    output_dir: str = field(default="./outputs")
     gradient_accumulation_steps: int = field(default=1)
     batch_size: int = field(default=1)
     num_train_epochs: int = field(default=1)
@@ -115,27 +126,91 @@ def load_single_dataset(
     dataset = dataset.map(get_table)
     
     return dataset
-    
+
+def generate_run_id(is_dry_run: bool):
+    """
+    Generate a run number in the format of run_YYYYMMDD_HHMMSS
+    """
+    now = datetime.now()
+    current_time = now.strftime("%Y%m%d_%H%M%S")
+    return 'run_{0}'.format(current_time) if not is_dry_run else "dry_run"
 
 def main():
-    parser = HfArgumentParser((DatasetArguments, TrainingArguments, PeftArguments))
+    parser = HfArgumentParser((ModelArguments, DatasetArguments, TrainingArguments, PeftArguments))
     if len(sys.argv) == 2 and sys.argv[1].endswith(".yaml"):
-        dataset_args, training_args, peft_args = parser.parse_yaml_file(sys.argv[1])
+        model_args, dataset_args, training_args, peft_args = parser.parse_yaml_file(sys.argv[1])
     else:
-        dataset_args, training_args, peft_args = parser.parse_args_into_dataclasses()
+        model_args, dataset_args, training_args, peft_args = parser.parse_args_into_dataclasses()
     
     # Load datasets
     datasets = load_datasets(dataset_args)
     
-    print(datasets)
+    # Tokenizer
+    tokenizer = PreTrainedTokenizerFast.from_pretrained(model_args.model_name)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
     
-    # # Tokenizer
-    # tokenizer = PreTrainedTokenizerFast.from_pretrained(training_args.model_name)
-    # tokenizer.pad_token = tokenizer.eos_token
-    # tokenizer.padding_side = "right"
+    # Model
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=model_args.load_in_4bit,
+        load_in_8bit=model_args.load_in_8bit,
+        bnb_4bit_compute_dtype=torch.bfloat16 if model_args.load_in_4bit else None,
+        bnb_4bit_use_double_quant=model_args.load_in_4bit,
+    )
     
+    model = LlamaForCausalLM.from_pretrained(
+        model_args.model_name,
+        quantization_config=bnb_config if model_args.load_in_4bit or model_args.load_in_8bit else None,
+        device_map="auto",
+    )
     
+    # Peft config
+    peft_config = LoraConfig(
+        task_type=peft_args.task_type,
+        r=peft_args.r,
+        lora_alpha=peft_args.lora_alpha,
+        lora_dropout=peft_args.lora_dropout,
+        bias=peft_args.bias,
+    )
     
+    # SFT config
+    run_id = generate_run_id(training_args.dry_run)
+    sft_config = SFTConfig(
+        output_dir=os.path.join(training_args.output_dir, run_id),
+        
+        do_train=True,
+        do_eval=True,
+        do_predict=False,
+        
+        per_device_train_batch_size=training_args.batch_size,
+        per_device_eval_batch_size=training_args.batch_size,
+        gradient_accumulation_steps=training_args.gradient_accumulation_steps,
+        max_seq_length=training_args.max_seq_length,
+        
+        num_train_epochs=training_args.num_train_epochs,
+        save_total_limit=training_args.save_total_limit,
+        logging_steps=training_args.logging_steps,
+        
+        remove_unused_columns=True,
+        
+        eval_strategy="steps",
+        eval_steps=100,
+        
+    )
+    
+    # SFT trainer
+    sft_trainer = SFTTrainer(
+        model=model,
+        tokenizer=tokenizer,
+        train_dataset=datasets["train"],
+        eval_dataset=datasets["validation"],
+        peft_config=peft_config,
+        args=sft_config,
+        # TODO: Temporary 
+        dataset_text_field="question",
+    )
+    
+    sft_trainer.train()
     
 
 if __name__ == "__main__":
