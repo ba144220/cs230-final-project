@@ -1,1 +1,0 @@
-python3 src/run_finetune_completion.py scripts/finetune_completion_config.yaml
