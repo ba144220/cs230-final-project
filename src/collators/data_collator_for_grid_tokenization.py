@@ -10,9 +10,11 @@ class DataCollatorForGridTokenization():
         tokenizer: PreTrainedTokenizerFast,
         max_seq_length: int,
         is_train: bool = True,
+        is_grid_tokenization: bool = False,
         system_prompt: str = SYSTEM_PROMPT,
         assistant_prefix: str = ASSISTANT_PREFIX,
         end_header_id: int = 128007,
+        
     ):
         self.tokenizer = tokenizer
         self.max_seq_length = max_seq_length
@@ -20,10 +22,12 @@ class DataCollatorForGridTokenization():
         self.end_header_id = end_header_id
         self.system_prompt = system_prompt
         self.assistant_prefix = assistant_prefix
+        self.is_grid_tokenization = is_grid_tokenization
     
     def _get_label(self, batch: Dict[str, torch.Tensor]):
         """
         Get the label for the batch
+        Set all labels before the last occurrence of the end_header_id to -100
         """
         if not self.is_train:
             return batch
@@ -35,13 +39,8 @@ class DataCollatorForGridTokenization():
             batch["labels"][i, :last_occurrence_indices[i] + 2] = -100
             
         return batch
-        
     
-    def __call__(self, examples: List[Dict[str, Any]]):
-        """
-        Columns: question, answer, context, id, task, direction, size, table
-        Only use question, table, and answer
-        """
+    def _call_normal(self, examples: List[Dict[str, Any]]):
         text_list = []
         for example in examples:
             user_prompt = str(example["table"]) + "\n" + str(example["question"])
@@ -70,6 +69,20 @@ class DataCollatorForGridTokenization():
         batch = self._get_label(batch)
             
         return batch
+        
+    def _call_grid_tokenization(self, examples: List[Dict[str, Any]]):
+        pass
+        
+    def __call__(self, examples: List[Dict[str, Any]]):
+        """
+        Columns: question, answer, context, id, task, direction, size, table
+        Only use question, table, and answer
+        """
+        if self.is_grid_tokenization:
+            return self._call_grid_tokenization(examples)
+        else:
+            return self._call_normal(examples)
+        
 
     def _get_last_occurrence_indices(self, input_ids, X):
         """
