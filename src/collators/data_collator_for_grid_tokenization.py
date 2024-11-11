@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+import pandas as pd
+from io import StringIO
 from typing import List, Dict, Any
 from transformers import PreTrainedTokenizerFast
 
@@ -123,6 +125,50 @@ class DataCollatorForGridTokenization():
         return a dictionary with the following keys: input_ids, attention_mask, labels
         """
         pass
+    def _grid_tokenize_example(self, example: Dict[str, Any]) -> List[int]:
+        """
+        Tokenize an example
+        """
+        # System prompt
+        system_prompt_tokenized = self._grid_tokenize_string(
+            self.system_prompt, 
+            include_header=True,
+            header_content="system",
+            include_eot=True,
+        )
+        # User prompt
+        before_table_tokenized = self._grid_tokenize_string(
+            "",
+            include_header=True,
+            header_content="user",
+            include_eot=False,
+        )
+        # Table
+        table_list = self._convert_csv_string_to_table(example["table"])
+        table_tokenized = self._grid_tokenize_table(table_list)
+        # After table
+        after_table_tokenized = self._grid_tokenize_string(
+            example["question"],
+            include_header=False,
+            include_eot=True,
+        )
+        # Assistant prompt
+        if self.is_train:
+            assistant_content = self.assistant_prefix + str(example["answer"])
+        else:
+            assistant_content = self.assistant_prefix
+            
+        assistant_prompt_tokenized = self._grid_tokenize_string(
+            assistant_content,
+            include_header=True,
+            header_content="assistant",
+            include_eot=True,
+            put_eot_at_the_end=False,
+        )
+        
+        return system_prompt_tokenized + before_table_tokenized + table_tokenized + after_table_tokenized + assistant_prompt_tokenized
+        
+        
     
     def _grid_tokenize_string(
         self, 
@@ -131,6 +177,7 @@ class DataCollatorForGridTokenization():
         include_header: bool = False,
         header_content: str = "",
         include_eot: bool = False,
+        put_eot_at_the_end: bool = True,
         ) -> List[int]:
         """
         Grid tokenize a string.
@@ -151,7 +198,10 @@ class DataCollatorForGridTokenization():
         if include_eot:
             # Pad the tokenized string to the nearest multiple of line_length (reserve the last token for eot)
             padding_length = (self.line_length - (len(tokenized_string) + 1) % self.line_length ) % self.line_length
-            tokenized_string = tokenized_string + [self.padding_token_id] * padding_length + [self.tokenizer.eos_token_id]
+            if put_eot_at_the_end:
+                tokenized_string = tokenized_string + [self.padding_token_id] * padding_length + [self.tokenizer.eos_token_id]
+            else:
+                tokenized_string = tokenized_string + [self.tokenizer.eos_token_id] + [self.padding_token_id] * padding_length
         else:
             # Pad the tokenized string to the nearest multiple of line_length
             padding_length = (self.line_length - len(tokenized_string) % self.line_length) % self.line_length
@@ -184,11 +234,6 @@ class DataCollatorForGridTokenization():
                 tokenized_table[i][j] = [self.padding_token_id] * (max_lengths[j] - len(tokenized_table[i][j])) + tokenized_table[i][j]
                 if j != len(tokenized_table[0]) - 1:
                     tokenized_table[i][j].append(self.table_separator_id)
-                else:
-                    # Pad to the nearest multiple of line_length
-                    padding_length = (self.line_length - (len(tokenized_table[i][j])+1) % self.line_length) % self.line_length
-                    tokenized_table[i][j] = tokenized_table[i][j] + [self.padding_token_id] * padding_length + self.tokenizer.encode("\n", add_special_tokens=False)
-
 
         # Concatenate the lines
         final_tokenized_table = []
@@ -197,12 +242,26 @@ class DataCollatorForGridTokenization():
             concatenated_row = []
             for cell in row:
                 concatenated_row.extend(cell)
+            # Pad the row line length and add a "\n" at the end
+            padding_length = self.line_length - len(concatenated_row) - 1
+            if padding_length > 0:
+                concatenated_row = concatenated_row + [self.padding_token_id] * padding_length + [self.tokenizer.encode("\n", add_special_tokens=False)[0]]
+            
+            # Crop the row to line_length
             concatenated_row = concatenated_row[:self.line_length]
             final_tokenized_table.extend(concatenated_row)
             
         return final_tokenized_table
         
-        
+    def _convert_csv_string_to_table(self, csv_string: str) -> List[List[str]]:
+        """
+        Convert a csv string to a table, including the header
+        """
+        df = pd.read_csv(StringIO(csv_string))
+        columns = df.columns.astype(str).tolist()
+        columns = [col.replace("Unnamed: 0", "") for col in columns]
+        rows = df.values.astype(str).tolist()
+        return [columns] + rows
         
         
     
