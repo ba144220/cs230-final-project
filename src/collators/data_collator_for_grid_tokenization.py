@@ -21,6 +21,22 @@ class DataCollatorForGridTokenization():
         self.system_prompt = system_prompt
         self.assistant_prefix = assistant_prefix
     
+    def _get_label(self, batch: Dict[str, torch.Tensor]):
+        """
+        Get the label for the batch
+        """
+        if not self.is_train:
+            return batch
+        
+        batch["labels"] = batch["input_ids"].clone()
+        # Set all labels before the last occurrence of the end_header_id to -100
+        last_occurrence_indices = self._get_last_occurrence_indices(batch["input_ids"], self.end_header_id)
+        for i in range(batch["input_ids"].size(0)):
+            batch["labels"][i, :last_occurrence_indices[i] + 2] = -100
+            
+        return batch
+        
+    
     def __call__(self, examples: List[Dict[str, Any]]):
         """
         Columns: question, answer, context, id, task, direction, size, table
@@ -51,14 +67,7 @@ class DataCollatorForGridTokenization():
             add_special_tokens=False,
         )
         
-        if not self.is_train:
-            return batch
-        
-        batch["labels"] = batch["input_ids"].clone()
-        # Set all labels before the last occurrence of the end_header_id to -100
-        last_occurrence_indices = self._get_last_occurrence_indices(batch["input_ids"], self.end_header_id)
-        for i in range(batch["input_ids"].size(0)):
-            batch["labels"][i, :last_occurrence_indices[i] + 2] = -100
+        batch = self._get_label(batch)
             
         return batch
 
