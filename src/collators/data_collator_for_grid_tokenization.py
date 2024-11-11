@@ -70,7 +70,11 @@ class DataCollatorForGridTokenization():
             
         return batch
         
-    def _call_grid_tokenization(self, examples: List[Dict[str, Any]]):
+    def _call_grid_tokenization(self, examples: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        """
+        examples: a list of dictionaries with the following keys: question, answer, context, id, task, direction, size, table
+        return a dictionary with the following keys: input_ids, attention_mask, labels
+        """
         pass
         
     def __call__(self, examples: List[Dict[str, Any]]):
