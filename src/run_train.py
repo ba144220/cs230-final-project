@@ -20,6 +20,10 @@ import transformers
 from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
 from parsers.argument_classes import ModelArguments, DatasetArguments, TrainingArguments, PeftArguments
 from utils.datasets_loader import load_datasets
+from models.modeling_table_llama import (
+    TableLlamaConfig,
+    TableLlamaForCausalLM
+)
 
 transformers.logging.set_verbosity_info()
 
@@ -55,12 +59,20 @@ def main():
         bnb_4bit_compute_dtype=torch.bfloat16 if model_args.load_in_4bit else None,
         bnb_4bit_use_double_quant=model_args.load_in_4bit,
     )
-    model = LlamaForCausalLM.from_pretrained(
-        model_args.model_name,
+    # TableLlama
+    table_llama_config = TableLlamaConfig.from_pretrained(model_args.model_name)
+    table_llama_config.rope_table_llama["channel_period"] = model_args.channel_period
+    table_llama_config.rope_table_llama["x_channel_offset"] = model_args.x_channel_offset
+    table_llama_config.rope_table_llama["y_channel_offset"] = model_args.y_channel_offset
+    table_llama_config.rope_table_llama["line_length"] = model_args.line_length
+
+    model = TableLlamaForCausalLM.from_pretrained(
+        model_args.model_name, 
         quantization_config=bnb_config if model_args.load_in_4bit or model_args.load_in_8bit else None,
         device_map="auto",
+        config=table_llama_config
     )
-    
+        
     # Peft config
     peft_config = LoraConfig(
         task_type=peft_args.task_type,
