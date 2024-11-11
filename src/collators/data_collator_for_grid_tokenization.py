@@ -4,7 +4,7 @@ from transformers import PreTrainedTokenizerFast
 
 from constants.prompts import SYSTEM_PROMPT, ASSISTANT_PREFIX
 
-class DataCollatorForAssistantCompletion():
+class DataCollatorForGridTokenization():
     def __init__(
         self, 
         tokenizer: PreTrainedTokenizerFast,

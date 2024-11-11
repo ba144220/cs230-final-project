@@ -17,7 +17,7 @@ from trl import SFTConfig, SFTTrainer
 
 import transformers
 
-from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
+from collators.data_collator_for_grid_tokenization import DataCollatorForGridTokenization
 from parsers.argument_classes import ModelArguments, DatasetArguments, TrainingArguments, PeftArguments
 from utils.datasets_loader import load_datasets
 
@@ -100,7 +100,7 @@ def main():
         }
     )
     
-    collator = DataCollatorForAssistantCompletion(
+    collator = DataCollatorForGridTokenization(
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
     )

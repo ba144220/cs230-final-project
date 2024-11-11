@@ -13,7 +13,7 @@ from torch.utils.data.dataloader import DataLoader
 
 from parsers.argument_classes import DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments
 from utils.datasets_loader import load_datasets
-from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
+from collators.data_collator_for_grid_tokenization import DataCollatorForGridTokenization
 
 def main():
     parser = HfArgumentParser((DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments))
@@ -49,7 +49,7 @@ def main():
     datasets = load_datasets(dataset_args)
     
     # Data collator
-    data_collator = DataCollatorForAssistantCompletion(
+    data_collator = DataCollatorForGridTokenization(
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
         is_train=False,
