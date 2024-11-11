@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from typing import List, Dict, Any
 from transformers import PreTrainedTokenizerFast
 
@@ -11,6 +12,7 @@ class DataCollatorForGridTokenization():
         max_seq_length: int,
         is_train: bool = True,
         is_grid_tokenization: bool = False,
+        line_length: int = 32,
         system_prompt: str = SYSTEM_PROMPT,
         assistant_prefix: str = ASSISTANT_PREFIX,
         end_header_id: int = 128007,
@@ -23,7 +25,14 @@ class DataCollatorForGridTokenization():
         self.system_prompt = system_prompt
         self.assistant_prefix = assistant_prefix
         self.is_grid_tokenization = is_grid_tokenization
-    
+        self.line_length = line_length
+        
+        self.start_header_id = 128006
+        self.end_header_id = 128007
+        self.padding_token_id = 128002 # <|reserved_special_token_0|>
+        self.table_separator_id = 128003 # <|reserved_special_token_1|>
+        
+        
     def _get_label(self, batch: Dict[str, torch.Tensor]):
         """
         Get the label for the batch
@@ -69,25 +78,7 @@ class DataCollatorForGridTokenization():
         batch = self._get_label(batch)
             
         return batch
-        
-    def _call_grid_tokenization(self, examples: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
-        """
-        examples: a list of dictionaries with the following keys: question, answer, context, id, task, direction, size, table
-        return a dictionary with the following keys: input_ids, attention_mask, labels
-        """
-        pass
-        
-    def __call__(self, examples: List[Dict[str, Any]]):
-        """
-        Columns: question, answer, context, id, task, direction, size, table
-        Only use question, table, and answer
-        """
-        if self.is_grid_tokenization:
-            return self._call_grid_tokenization(examples)
-        else:
-            return self._call_normal(examples)
-        
-
+   
     def _get_last_occurrence_indices(self, input_ids, X):
         """
         input_ids: 2D tensor of shape B x L
@@ -114,3 +105,105 @@ class DataCollatorForGridTokenization():
         last_indices[~has_X] = -1  # Set to -1 where X does not occur
 
         return last_indices.unsqueeze(1)  # Shape: B x 1
+        
+    def __call__(self, examples: List[Dict[str, Any]]):
+        """
+        Columns: question, answer, context, id, task, direction, size, table
+        Only use question, table, and answer
+        """
+        if self.is_grid_tokenization:
+            return self._call_grid_tokenization(examples)
+        else:
+            return self._call_normal(examples)
+        
+
+    def _call_grid_tokenization(self, examples: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
+        """
+        examples: a list of dictionaries with the following keys: question, answer, context, id, task, direction, size, table
+        return a dictionary with the following keys: input_ids, attention_mask, labels
+        """
+        pass
+    
+    def _grid_tokenize_string(
+        self, 
+        string: str,
+        is_begin_of_text: bool = False,
+        include_header: bool = False,
+        header_content: str = "",
+        include_eot: bool = False,
+        ) -> List[int]:
+        """
+        Grid tokenize a string.
+        The output is a list of token ids with a length of multiple of line_length.
+        The eot token must be the last token in the output.
+        """
+        # Tokenize the string, without any special tokens
+        tokenized_string = self.tokenizer.encode(string, add_special_tokens=False)
+        
+        if is_begin_of_text:
+            tokenized_string = [self.tokenizer.bos_token_id] + tokenized_string
+        
+        if include_header:
+            if not header_content:
+                raise ValueError("header_content is required when include_header is True")
+            tokenized_string = [self.start_header_id] + self.tokenizer.encode(header_content, add_special_tokens=False) + [self.end_header_id, 271] + tokenized_string
+            
+        if include_eot:
+            # Pad the tokenized string to the nearest multiple of line_length (reserve the last token for eot)
+            padding_length = (self.line_length - (len(tokenized_string) + 1) % self.line_length ) % self.line_length
+            tokenized_string = tokenized_string + [self.padding_token_id] * padding_length + [self.tokenizer.eos_token_id]
+        else:
+            # Pad the tokenized string to the nearest multiple of line_length
+            padding_length = (self.line_length - len(tokenized_string) % self.line_length) % self.line_length
+            tokenized_string = tokenized_string + [self.padding_token_id] * padding_length
+
+        return tokenized_string
+    
+    def _grid_tokenize_table(self, table: List[List[str]]) -> List[int]:
+        """
+        Grid tokenize a table. For each row, we need to pad the tokens to the nearest multiple of line_length.
+        And we also need to align each column.
+        """
+        # Find the max length for each column
+        token_lengths = np.zeros((len(table), len(table[0])), dtype=int)
+        tokenized_table = []
+        for i in range(len(table)):
+            tokenized_row = []
+            for j in range(len(table[0])):
+                tokenized_cell = self.tokenizer.encode(table[i][j], add_special_tokens=False)
+                tokenized_row.append(tokenized_cell)
+                token_lengths[i, j] = len(tokenized_cell)
+            tokenized_table.append(tokenized_row)
+        
+        # Find the max length for each column
+        max_lengths = np.max(token_lengths, axis=0)
+        
+        # Pad each cell to the max length of the column
+        for i in range(len(tokenized_table)):
+            for j in range(len(tokenized_table[0])):
+                tokenized_table[i][j] = [self.padding_token_id] * (max_lengths[j] - len(tokenized_table[i][j])) + tokenized_table[i][j]
+                if j != len(tokenized_table[0]) - 1:
+                    tokenized_table[i][j].append(self.table_separator_id)
+                else:
+                    # Pad to the nearest multiple of line_length
+                    padding_length = (self.line_length - (len(tokenized_table[i][j])+1) % self.line_length) % self.line_length
+                    tokenized_table[i][j] = tokenized_table[i][j] + [self.padding_token_id] * padding_length + self.tokenizer.encode("\n", add_special_tokens=False)
+
+
+        # Concatenate the lines
+        final_tokenized_table = []
+        for row in tokenized_table:
+            # Crop the table to line_length
+            concatenated_row = []
+            for cell in row:
+                concatenated_row.extend(cell)
+            concatenated_row = concatenated_row[:self.line_length]
+            final_tokenized_table.extend(concatenated_row)
+            
+        return final_tokenized_table
+        
+        
+        
+        
+    
+    
