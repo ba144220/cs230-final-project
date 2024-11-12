@@ -8,9 +8,9 @@ class ModelArguments:
     load_in_8bit: bool = field(default=False)
     load_in_4bit: bool = field(default=False)
     line_length: int = field(default=32)
-    channel_period: int = field(4)
-    x_channel_offset: int = field(2)
-    y_channel_offset: int = field(3)
+    channel_period: int = field(default=4)
+    x_channel_offset: int = field(default=2)
+    y_channel_offset: int = field(default=3)
 
 @dataclass
 class TrainingArguments:
