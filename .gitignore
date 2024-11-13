@@ -182,5 +182,5 @@ wandb/
 
 # scripts
 # Ignore scripts ending with .yaml except example.yaml
-/scripts/*.yaml
-!/scripts/*.example.yaml
+# /scripts/*.yaml
+# !/scripts/*.example.yaml
