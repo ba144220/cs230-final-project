@@ -38,6 +38,9 @@ class DatasetArguments:
     test_max_samples_for_each_dataset: int = field(default=-1)
     shuffle_seed: int = field(default=42)
     shuffle: bool = field(default=True)
+    
+    max_table_row_num: int = field(default=None)
+    max_table_width: int = field(default=None)
 
 @dataclass
 class PeftArguments:

@@ -46,7 +46,13 @@ def main():
         model.load_adapter(model_args.adapter_path)
     
     # Load datasets
-    datasets = load_datasets(dataset_args)
+    def filter_function(example):
+        if dataset_args.max_table_row_num is not None and example["table_row_num"] > dataset_args.max_table_row_num:
+            return False
+        if dataset_args.max_table_width is not None and example["table_width"] > dataset_args.max_table_width:
+            return False
+        return True
+    datasets = load_datasets(dataset_args, filter_function=filter_function)
     
     # Data collator
     data_collator = DataCollatorForGridTokenization(
