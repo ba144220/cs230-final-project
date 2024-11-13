@@ -5,7 +5,6 @@ from tqdm import tqdm
 from transformers import (
     HfArgumentParser, 
     PreTrainedTokenizerFast, 
-    LlamaForCausalLM, 
     BitsAndBytesConfig
 )
 import torch
@@ -14,6 +13,11 @@ from torch.utils.data.dataloader import DataLoader
 from parsers.argument_classes import DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments
 from utils.datasets_loader import load_datasets
 from collators.data_collator_for_grid_tokenization import DataCollatorForGridTokenization
+
+from models.modeling_table_llama import (
+    TableLlamaConfig,
+    TableLlamaForCausalLM
+)
 
 def main():
     parser = HfArgumentParser((DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments))
@@ -34,10 +38,18 @@ def main():
         bnb_4bit_compute_dtype=torch.bfloat16 if model_args.load_in_4bit else None,
         bnb_4bit_use_double_quant=model_args.load_in_4bit,
     )
-    model = LlamaForCausalLM.from_pretrained(
-        model_args.model_name,
+    # TableLlama
+    table_llama_config = TableLlamaConfig.from_pretrained(model_args.model_name)
+    table_llama_config.rope_table_llama["channel_period"] = model_args.channel_period
+    table_llama_config.rope_table_llama["x_channel_offset"] = model_args.x_channel_offset
+    table_llama_config.rope_table_llama["y_channel_offset"] = model_args.y_channel_offset
+    table_llama_config.rope_table_llama["line_length"] = model_args.line_length
+
+    model = TableLlamaForCausalLM.from_pretrained(
+        model_args.model_name, 
         quantization_config=bnb_config if model_args.load_in_4bit or model_args.load_in_8bit else None,
         device_map="auto",
+        config=table_llama_config
     )
     model.generation_config.pad_token_id = tokenizer.pad_token_id
     model.generation_config.eos_token_id = tokenizer.eos_token_id
