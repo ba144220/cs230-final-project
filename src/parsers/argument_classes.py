@@ -32,11 +32,12 @@ class GenerationArguments:
 class DatasetArguments:
     dataset_root_dir: str = field(default="./datasets")
     dataset_names: List[str] = field(default_factory=lambda: ["self_generated", "wtq"])
-    table_extension: str = field(default="html")
+    table_extension: str = field(default="csv")
     train_max_samples_for_each_dataset: int = field(default=-1)
     val_max_samples_for_each_dataset: int = field(default=-1)
     test_max_samples_for_each_dataset: int = field(default=-1)
     shuffle_seed: int = field(default=42)
+    shuffle: bool = field(default=True)
 
 @dataclass
 class PeftArguments:

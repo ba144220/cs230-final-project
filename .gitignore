@@ -166,6 +166,7 @@ cython_debug/
 
 # Dataset
 /datasets/
+/datasets*/
 
 # Outputs
 /outputs/
