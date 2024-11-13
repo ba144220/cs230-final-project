@@ -11,12 +11,6 @@ import transformers.utils.logging as logging
 logger = logging.get_logger(__name__)
 
 
-DEFAULT_ROPE_TABLE_LLAMA = {
-    "line_length": 32,
-    "channel_period": 4,
-    "x_channel_offset": 2,
-    "y_channel_offset": 3,
-}
 
 """
 TableLlamaConfig
@@ -49,12 +43,21 @@ class TableLlamaConfig(LlamaConfig):
         super().__init__(**kwargs)
         rope_table_llama = kwargs.pop("rope_table_llama", None)
         if rope_table_llama is None:
-            logger.warning("[TableLlamaConfig] `rope_table_llama` is None. Using default values.")
-            self.rope_table_llama = DEFAULT_ROPE_TABLE_LLAMA
+            self.rope_table_llama = {
+                "line_length": None,
+                "channel_period": None,
+                "x_channel_offset": None,
+                "y_channel_offset": None,
+            }
         else:
             self.rope_table_llama = rope_table_llama
+        # if rope_table_llama is None:
+        #     logger.warning("[TableLlamaConfig] `rope_table_llama` is None. Using default values.")
+        #     self.rope_table_llama = DEFAULT_ROPE_TABLE_LLAMA
+        # else:
+        #     self.rope_table_llama = rope_table_llama
         
-        rope_table_llama_config_validation(self)
+        # rope_table_llama_config_validation(self)
        
 
 """
@@ -83,6 +86,23 @@ class TableLlamaRotaryEmbedding(torch.nn.Module):
         x_offset = self.rope_table_llama["x_channel_offset"]
         y_offset = self.rope_table_llama["y_channel_offset"]
         line_length = self.rope_table_llama["line_length"]
+        
+        if line_length is None:
+            # Set a large number to avoid the RoPE effect
+            line_length = 10**8
+            period = 10**8
+            x_offset = 10**8
+            y_offset = 10**8
+        
+        if period is None:
+            period = 10**8
+            x_offset = 10**8
+            y_offset = 10**8
+            
+        if x_offset is None:
+            x_offset = 10**8
+        if y_offset is None:
+            y_offset = 10**8
         
         # Get the default rope parameters
         default_rope_init_fn = ROPE_INIT_FUNCTIONS["default"]

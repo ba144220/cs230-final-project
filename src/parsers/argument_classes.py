@@ -7,10 +7,11 @@ class ModelArguments:
     adapter_path: str = field(default="")
     load_in_8bit: bool = field(default=False)
     load_in_4bit: bool = field(default=False)
-    line_length: int = field(default=32)
-    channel_period: int = field(default=4)
-    x_channel_offset: int = field(default=2)
-    y_channel_offset: int = field(default=3)
+    # TableLlama arguments
+    line_length: int = field(default=None)
+    channel_period: int = field(default=None)
+    x_channel_offset: int = field(default=None)
+    y_channel_offset: int = field(default=None)
 
 @dataclass
 class TrainingArguments:
