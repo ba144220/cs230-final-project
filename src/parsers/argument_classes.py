@@ -25,8 +25,8 @@ class TrainingArguments:
 class GenerationArguments:
     max_new_tokens: int = field(default=100)
     do_sample: bool = field(default=False)
-    top_k: int = field(default=50)
-    top_p: float = field(default=0.95)
+    top_k: int = field(default=None)
+    top_p: float = field(default=None)
 
 @dataclass
 class DatasetArguments:
