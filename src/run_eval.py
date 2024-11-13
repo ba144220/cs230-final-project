@@ -71,6 +71,8 @@ def main():
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
         is_train=False,
+        is_grid_tokenization=model_args.line_length is not None,
+        line_length=model_args.line_length if model_args.line_length is not None else 64,
     )
     
     # Inference loop
@@ -94,6 +96,7 @@ def main():
                 do_sample=generation_args.do_sample,
                 top_k=generation_args.top_k,
                 top_p=generation_args.top_p,
+                temperature=generation_args.temperature,
                 pad_token_id=tokenizer.eos_token_id
             )
             output_strings = tokenizer.batch_decode(outputs[:, input_length:], skip_special_tokens=False)

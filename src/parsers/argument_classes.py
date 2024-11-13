@@ -32,6 +32,7 @@ class GenerationArguments:
     do_sample: bool = field(default=False)
     top_k: int = field(default=None)
     top_p: float = field(default=None)
+    temperature: float = field(default=None)
 
 @dataclass
 class DatasetArguments:

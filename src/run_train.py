@@ -6,7 +6,6 @@ import shutil
 from datetime import datetime
 
 from transformers import (
-    LlamaForCausalLM, 
     PreTrainedTokenizerFast, 
     BitsAndBytesConfig,
     HfArgumentParser,
@@ -121,6 +120,9 @@ def main():
     collator = DataCollatorForGridTokenization(
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
+        is_train=True,
+        is_grid_tokenization=model_args.line_length is not None,
+        line_length=model_args.line_length if model_args.line_length is not None else 64,
     )
    
     # SFT trainer

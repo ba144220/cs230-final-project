@@ -14,7 +14,7 @@ class DataCollatorForGridTokenization():
         max_seq_length: int,
         is_train: bool = True,
         is_grid_tokenization: bool = False,
-        line_length: int = 32,
+        line_length: int = 64,
         system_prompt: str = SYSTEM_PROMPT,
         assistant_prefix: str = ASSISTANT_PREFIX,
         end_header_id: int = 128007,

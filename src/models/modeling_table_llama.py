@@ -90,9 +90,6 @@ class TableLlamaRotaryEmbedding(torch.nn.Module):
         if line_length is None:
             # Set a large number to avoid the RoPE effect
             line_length = 10**8
-            period = 10**8
-            x_offset = 10**8
-            y_offset = 10**8
         
         if period is None:
             period = 10**8
@@ -111,7 +108,9 @@ class TableLlamaRotaryEmbedding(torch.nn.Module):
         # Repeat the default_inv_freq for `channel_period` times
         inv_freq_2d = torch.repeat_interleave(default_inv_freq, period, dim=0) # (dim // 2 * channel_period)
         # Get the first d//2 elements
-        inv_freq_2d = inv_freq_2d[:inv_freq.shape[0]] # (dim // 2)
+        # TODO: tbd
+        i_offset = 0
+        inv_freq_2d = inv_freq_2d[i_offset:i_offset+inv_freq.shape[0]] # (dim // 2)
         
         # Replace inv_freq for every N*channel_period + x_channel_offset elements
         inv_freq[x_offset::period] = inv_freq_2d[x_offset::period]
