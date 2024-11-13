@@ -30,18 +30,22 @@ class TrainingArguments:
 class GenerationArguments:
     max_new_tokens: int = field(default=100)
     do_sample: bool = field(default=False)
-    top_k: int = field(default=50)
-    top_p: float = field(default=0.95)
+    top_k: int = field(default=None)
+    top_p: float = field(default=None)
 
 @dataclass
 class DatasetArguments:
     dataset_root_dir: str = field(default="./datasets")
     dataset_names: List[str] = field(default_factory=lambda: ["self_generated", "wtq"])
-    table_extension: str = field(default="html")
+    table_extension: str = field(default="csv")
     train_max_samples_for_each_dataset: int = field(default=-1)
     val_max_samples_for_each_dataset: int = field(default=-1)
     test_max_samples_for_each_dataset: int = field(default=-1)
     shuffle_seed: int = field(default=42)
+    shuffle: bool = field(default=True)
+    
+    max_table_row_num: int = field(default=None)
+    max_table_width: int = field(default=None)
 
 @dataclass
 class PeftArguments:

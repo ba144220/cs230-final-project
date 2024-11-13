@@ -17,7 +17,7 @@ from trl import SFTConfig, SFTTrainer
 
 import transformers
 
-from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
+from collators.data_collator_for_grid_tokenization import DataCollatorForGridTokenization
 from parsers.argument_classes import ModelArguments, DatasetArguments, TrainingArguments, PeftArguments
 from utils.datasets_loader import load_datasets
 from models.modeling_table_llama import (
@@ -45,7 +45,13 @@ def main():
         model_args, dataset_args, training_args, peft_args = parser.parse_args_into_dataclasses()
     
     # Load datasets
-    datasets = load_datasets(dataset_args)
+    def filter_function(example):
+        if dataset_args.max_table_row_num is not None and example["table_row_num"] > dataset_args.max_table_row_num:
+            return False
+        if dataset_args.max_table_width is not None and example["table_width"] > dataset_args.max_table_width:
+            return False
+        return True
+    datasets = load_datasets(dataset_args, filter_function=filter_function)
     
     # Tokenizer
     tokenizer = PreTrainedTokenizerFast.from_pretrained(model_args.model_name)
@@ -112,7 +118,7 @@ def main():
         }
     )
     
-    collator = DataCollatorForAssistantCompletion(
+    collator = DataCollatorForGridTokenization(
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
     )

@@ -5,7 +5,6 @@ from tqdm import tqdm
 from transformers import (
     HfArgumentParser, 
     PreTrainedTokenizerFast, 
-    LlamaForCausalLM, 
     BitsAndBytesConfig
 )
 import torch
@@ -13,7 +12,8 @@ from torch.utils.data.dataloader import DataLoader
 
 from parsers.argument_classes import DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments
 from utils.datasets_loader import load_datasets
-from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
+from collators.data_collator_for_grid_tokenization import DataCollatorForGridTokenization
+
 from models.modeling_table_llama import (
     TableLlamaConfig,
     TableLlamaForCausalLM
@@ -58,10 +58,16 @@ def main():
         model.load_adapter(model_args.adapter_path)
     
     # Load datasets
-    datasets = load_datasets(dataset_args)
+    def filter_function(example):
+        if dataset_args.max_table_row_num is not None and example["table_row_num"] > dataset_args.max_table_row_num:
+            return False
+        if dataset_args.max_table_width is not None and example["table_width"] > dataset_args.max_table_width:
+            return False
+        return True
+    datasets = load_datasets(dataset_args, filter_function=filter_function)
     
     # Data collator
-    data_collator = DataCollatorForAssistantCompletion(
+    data_collator = DataCollatorForGridTokenization(
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
         is_train=False,
