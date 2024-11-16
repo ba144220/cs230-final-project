@@ -117,3 +117,14 @@ For each table, generate 4 questions for rows and columns. (Total 8 questions pe
 * Range of letters: A-Z
 * Answers are separated by commas.
     * e.g. A, B, C, D
+
+
+# Modeling
+
+Here is the modules hierarchy of the Llama 3.2 model:
+```Mermaid
+flowchart TD
+    LlamaForCausalLM --> LlamaModel
+    LlamaModel --> LlamaDecoderLayer
+    LlamaDecoderLayer --> LlamaAttention
+```

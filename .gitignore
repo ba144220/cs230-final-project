@@ -166,3 +166,20 @@ cython_debug/
 
 # Dataset
 /datasets/
+/datasets*/
+
+# Outputs
+/outputs/
+
+# .DS_Store
+.DS_Store
+
+# run_number
+run_number.txt
+
+# wandb
+wandb/
+
+# configs
+# Ignore configs 
+/configs/

@@ -1,0 +1,1 @@
+python3 src/run_train.py scripts/train_config.yaml
