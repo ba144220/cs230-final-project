@@ -1,5 +1,4 @@
 import os
-import re
 import sys
 import torch
 import shutil
@@ -89,6 +88,11 @@ def main():
     
     # SFT config
     run_id = generate_run_id(training_args.dry_run)
+    if training_args.wandb_project:
+        os.environ["WANDB_PROJECT"] = training_args.wandb_project
+        os.environ["WANDB_LOG_MODEL"] = "checkpoint"
+        os.environ["WANDB_DISABLED"] = "false"
+    
     sft_config = SFTConfig(
         output_dir=os.path.join(training_args.output_dir, run_id),
         
@@ -111,6 +115,9 @@ def main():
         
         eval_strategy="steps",
         eval_steps=training_args.eval_steps,
+        
+        report_to=["wandb"] if training_args.wandb_project else [],
+        run_name=run_id,
         
         dataset_kwargs={
             "skip_prepare_dataset": True,
@@ -135,9 +142,7 @@ def main():
         args=sft_config,
         data_collator=collator,
     )
-    
-    sft_trainer.evaluate()
-    
+        
     sft_trainer.train()
     
     sft_trainer.save_model(sft_config.output_dir)

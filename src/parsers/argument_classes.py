@@ -25,6 +25,8 @@ class TrainingArguments:
     eval_steps: int = field(default=200)
     max_seq_length: int = field(default=1024)
     dry_run: bool = field(default=False)
+    
+    wandb_project: str = field(default=None)
 
 @dataclass
 class GenerationArguments:
