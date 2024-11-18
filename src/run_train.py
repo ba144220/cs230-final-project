@@ -9,6 +9,7 @@ from transformers import (
     BitsAndBytesConfig,
     HfArgumentParser,
 )
+from transformers.integrations.integration_utils import WandbCallback
 
 from peft import LoraConfig
 from trl import SFTConfig, SFTTrainer
@@ -22,6 +23,9 @@ from models.modeling_table_llama import (
     TableLlamaConfig,
     TableLlamaForCausalLM
 )
+
+from callbacks.fixed_wandb_callback import FixedWandbCallback
+
 
 transformers.logging.set_verbosity_info()
 
@@ -131,7 +135,6 @@ def main():
         is_grid_tokenization=model_args.line_length is not None,
         line_length=model_args.line_length if model_args.line_length is not None else 64,
     )
-   
     # SFT trainer
     sft_trainer = SFTTrainer(
         model=model,
@@ -142,7 +145,10 @@ def main():
         args=sft_config,
         data_collator=collator,
     )
-        
+    # Fix the wandb callback
+    sft_trainer.remove_callback(WandbCallback)
+    sft_trainer.add_callback(FixedWandbCallback)
+    
     sft_trainer.train()
     
     sft_trainer.save_model(sft_config.output_dir)
