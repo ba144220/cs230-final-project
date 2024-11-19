@@ -82,10 +82,15 @@ def main():
     )
     # TableLlama
     table_llama_config = TableLlamaConfig.from_pretrained(model_args.model_name)
-    table_llama_config.rope_table_llama["channel_period"] = model_args.channel_period
-    table_llama_config.rope_table_llama["x_channel_offset"] = model_args.x_channel_offset
-    table_llama_config.rope_table_llama["y_channel_offset"] = model_args.y_channel_offset
-    table_llama_config.rope_table_llama["line_length"] = model_args.line_length
+    table_llama_config.rope_table_llama = {
+        "line_length": model_args.line_length,
+        "x_channels_start": model_args.x_channels_start,
+        "x_channels_end": model_args.x_channels_end,
+        "x_channels_step": model_args.x_channels_step,
+        "y_channels_start": model_args.y_channels_start,
+        "y_channels_end": model_args.y_channels_end,
+        "y_channels_step": model_args.y_channels_step,
+    }
 
     model = TableLlamaForCausalLM.from_pretrained(
         model_args.model_name, 
@@ -160,7 +165,7 @@ def main():
     # Fix the wandb callback
     sft_trainer.remove_callback(WandbCallback)
     sft_trainer.add_callback(FixedWandbCallback)
-    
+        
     sft_trainer.train()
     
     sft_trainer.save_model(sft_config.output_dir)
