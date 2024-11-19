@@ -3,6 +3,9 @@ import sys
 import torch
 import shutil
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import wandb
 
 from transformers import (
     PreTrainedTokenizerFast, 
@@ -27,15 +30,16 @@ from models.modeling_table_llama import (
 from callbacks.fixed_wandb_callback import FixedWandbCallback
 
 
-transformers.logging.set_verbosity_info()
+# transformers.logging.set_verbosity_info()
 
 
 def generate_run_id(is_dry_run: bool):
     """
-    Generate a run number in the format of run_YYYYMMDD_HHMMSS
+    Generate a run number in the format of run_YYMMDD_HHMMSS
     """
-    now = datetime.now()
-    current_time = now.strftime("%Y%m%d_%H%M%S")
+    # Set timezone to Pacific Time
+    now = datetime.now(ZoneInfo("US/Pacific"))
+    current_time = now.strftime("%y%m%d_%H%M%S")
     return 'run_{0}'.format(current_time) if not is_dry_run else "dry_run"
 
 
@@ -45,6 +49,15 @@ def main():
         model_args, dataset_args, training_args, peft_args = parser.parse_yaml_file(sys.argv[1])
     else:
         model_args, dataset_args, training_args, peft_args = parser.parse_args_into_dataclasses()
+        
+    # Wandb setup
+    run_id = generate_run_id(training_args.dry_run)
+    if training_args.wandb_entity and training_args.wandb_project:
+        wandb.init(
+            entity=training_args.wandb_entity,
+            project=training_args.wandb_project,
+            name=run_id,
+        )
     
     # Load datasets
     def filter_function(example):
@@ -91,7 +104,6 @@ def main():
     )
     
     # SFT config
-    run_id = generate_run_id(training_args.dry_run)
     if training_args.wandb_project:
         os.environ["WANDB_PROJECT"] = training_args.wandb_project
         os.environ["WANDB_LOG_MODEL"] = "checkpoint"

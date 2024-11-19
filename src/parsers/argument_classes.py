@@ -26,6 +26,7 @@ class TrainingArguments:
     max_seq_length: int = field(default=1024)
     dry_run: bool = field(default=False)
     
+    wandb_entity: str = field(default=None)
     wandb_project: str = field(default=None)
 
 @dataclass
