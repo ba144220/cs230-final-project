@@ -40,10 +40,15 @@ def main():
     )
     # TableLlama
     table_llama_config = TableLlamaConfig.from_pretrained(model_args.model_name)
-    table_llama_config.rope_table_llama["channel_period"] = model_args.channel_period
-    table_llama_config.rope_table_llama["x_channel_offset"] = model_args.x_channel_offset
-    table_llama_config.rope_table_llama["y_channel_offset"] = model_args.y_channel_offset
-    table_llama_config.rope_table_llama["line_length"] = model_args.line_length
+    table_llama_config.rope_table_llama = {
+        "line_length": model_args.line_length,
+        "x_channels_start": model_args.x_channels_start,
+        "x_channels_end": model_args.x_channels_end,
+        "x_channels_step": model_args.x_channels_step,
+        "y_channels_start": model_args.y_channels_start,
+        "y_channels_end": model_args.y_channels_end,
+        "y_channels_step": model_args.y_channels_step,
+    }
 
     model = TableLlamaForCausalLM.from_pretrained(
         model_args.model_name, 
@@ -115,34 +120,37 @@ def main():
     print(f"Base model: {model_args.model_name}")
     print(f"Adapter: {model_args.adapter_path}")
     print(f"Total samples: {df.shape[0]}")
+
+    if "self_generated" in dataset_args.dataset_names:
+        
+        # Count accuracy for each task and direction
+        list_item_row_total = df[(df["task"] == "list_items") & (df["direction"] == "row")].shape[0]
+        list_item_col_total = df[(df["task"] == "list_items") & (df["direction"] == "column")].shape[0]
+        arithmetic_row_total = df[(df["task"] == "arithmetic") & (df["direction"] == "row")].shape[0]
+        arithmetic_col_total = df[(df["task"] == "arithmetic") & (df["direction"] == "column")].shape[0]
+        
+        list_item_row_correct = df[(df["task"] == "list_items") & (df["direction"] == "row") & (df["correct"])].shape[0] 
+        list_item_col_correct = df[(df["task"] == "list_items") & (df["direction"] == "column") & (df["correct"])].shape[0] 
+        arithmetic_row_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "row") & (df["correct"])].shape[0] 
+        arithmetic_col_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "column") & (df["correct"])].shape[0] 
+        
+        self_generated_total = list_item_row_total + list_item_col_total + arithmetic_row_total + arithmetic_col_total
+        self_generated_correct = list_item_row_correct + list_item_col_correct + arithmetic_row_correct + arithmetic_col_correct
+        
+        print(f"List item row correct: {list_item_row_correct} / {list_item_row_total} = {list_item_row_correct / list_item_row_total * 100:.2f}%")
+        print(f"List item column correct: {list_item_col_correct} / {list_item_col_total} = {list_item_col_correct / list_item_col_total * 100:.2f}%")
+        print(f"Arithmetic row correct: {arithmetic_row_correct} / {arithmetic_row_total} = {arithmetic_row_correct / arithmetic_row_total * 100:.2f}%")
+        print(f"Arithmetic column correct: {arithmetic_col_correct} / {arithmetic_col_total} = {arithmetic_col_correct / arithmetic_col_total * 100:.2f}%")
+        print(f"Self-generated correct: {self_generated_correct} / {self_generated_total} = {self_generated_correct / self_generated_total * 100:.2f}%")
     
-    # Count accuracy for each task and direction
-    list_item_row_total = df[(df["task"] == "list_items") & (df["direction"] == "row")].shape[0]
-    list_item_col_total = df[(df["task"] == "list_items") & (df["direction"] == "column")].shape[0]
-    arithmetic_row_total = df[(df["task"] == "arithmetic") & (df["direction"] == "row")].shape[0]
-    arithmetic_col_total = df[(df["task"] == "arithmetic") & (df["direction"] == "column")].shape[0]
+    if "wtq" in dataset_args.dataset_names:
+        wtq_total = df[df["task"] == "wtq"].shape[0]
+        wtq_correct = df[(df["task"] == "wtq") & (df["correct"])].shape[0]
+            
+        print(f"WTQ correct: {wtq_correct} / {wtq_total} = {wtq_correct / wtq_total * 100:.2f}%")
     
-    list_item_row_correct = df[(df["task"] == "list_items") & (df["direction"] == "row") & (df["correct"])].shape[0] 
-    list_item_col_correct = df[(df["task"] == "list_items") & (df["direction"] == "column") & (df["correct"])].shape[0] 
-    arithmetic_row_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "row") & (df["correct"])].shape[0] 
-    arithmetic_col_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "column") & (df["correct"])].shape[0] 
-    
-    self_generated_total = list_item_row_total + list_item_col_total + arithmetic_row_total + arithmetic_col_total
-    self_generated_correct = list_item_row_correct + list_item_col_correct + arithmetic_row_correct + arithmetic_col_correct
-    
-    print(f"List item row correct: {list_item_row_correct} / {list_item_row_total} = {list_item_row_correct / list_item_row_total * 100:.2f}%")
-    print(f"List item column correct: {list_item_col_correct} / {list_item_col_total} = {list_item_col_correct / list_item_col_total * 100:.2f}%")
-    print(f"Arithmetic row correct: {arithmetic_row_correct} / {arithmetic_row_total} = {arithmetic_row_correct / arithmetic_row_total * 100:.2f}%")
-    print(f"Arithmetic column correct: {arithmetic_col_correct} / {arithmetic_col_total} = {arithmetic_col_correct / arithmetic_col_total * 100:.2f}%")
-    print(f"Self-generated correct: {self_generated_correct} / {self_generated_total} = {self_generated_correct / self_generated_total * 100:.2f}%")
-    
-    wtq_total = df[df["task"] == "wtq"].shape[0]
-    wtq_correct = df[(df["task"] == "wtq") & (df["correct"])].shape[0]
-    
-    print(f"WTQ correct: {wtq_correct} / {wtq_total} = {wtq_correct / wtq_total * 100:.2f}%")
-    
-    total_correct = self_generated_correct + wtq_correct
-    total_total = self_generated_total + wtq_total
+    total_correct = df["correct"].sum()
+    total_total = df.shape[0]
     
     print(f"Total correct: {total_correct} / {total_total} = {total_correct / total_total * 100:.2f}%")
     
@@ -152,6 +160,8 @@ def main():
     if model_args.adapter_path:
         output_path = os.path.join(model_args.adapter_path, f"predictions.csv")
     else:
+        # Create the output directory if not exists
+        os.makedirs(training_args.output_dir, exist_ok=True)
         output_path = os.path.join(training_args.output_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_predictions.csv")
         
     df.to_csv(output_path, index=False)
