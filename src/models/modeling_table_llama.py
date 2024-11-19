@@ -16,27 +16,6 @@ logger = logging.get_logger(__name__)
 TableLlamaConfig
 """
 
-def rope_table_llama_config_validation(config):
-    
-    rope_table_llama = getattr(config, "rope_table_llama", None)
-    # Sanity check for `rope_table_llama`
-    if rope_table_llama is None:
-        raise ValueError("[TableLlamaConfig] `rope_table_llama` must be specified")
-    
-    # `x_channel_offset` must be less than `channel_period`
-    line_length = rope_table_llama.get("line_length", None)
-    channel_period = rope_table_llama.get("channel_period", None)
-    x_channel_offset = rope_table_llama.get("x_channel_offset", None)
-    y_channel_offset = rope_table_llama.get("y_channel_offset", None)
-    if line_length is None or channel_period is None or x_channel_offset is None or y_channel_offset is None:
-        raise ValueError("`x_channel_offset`, `y_channel_offset`, and `channel_period` must be specified")
-    if x_channel_offset == y_channel_offset:
-        raise ValueError("`x_channel_offset` and `y_channel_offset` must be different")
-    if x_channel_offset < 0 or y_channel_offset < 0:
-        raise ValueError("`x_channel_offset` and `y_channel_offset` must be non-negative")
-
-
-
 class TableLlamaConfig(LlamaConfig):
     # Add a new parameter `rope_table_llama` to the LlamaConfig class
     def __init__(self,**kwargs):
@@ -45,19 +24,15 @@ class TableLlamaConfig(LlamaConfig):
         if rope_table_llama is None:
             self.rope_table_llama = {
                 "line_length": None,
-                "channel_period": None,
-                "x_channel_offset": None,
-                "y_channel_offset": None,
+                "x_channels_start": None,
+                "x_channels_end": None,
+                "x_channels_step": None,
+                "y_channels_start": None,
+                "y_channels_end": None,
+                "y_channels_step": None,
             }
         else:
             self.rope_table_llama = rope_table_llama
-        # if rope_table_llama is None:
-        #     logger.warning("[TableLlamaConfig] `rope_table_llama` is None. Using default values.")
-        #     self.rope_table_llama = DEFAULT_ROPE_TABLE_LLAMA
-        # else:
-        #     self.rope_table_llama = rope_table_llama
-        
-        # rope_table_llama_config_validation(self)
        
 
 """
@@ -82,47 +57,47 @@ class TableLlamaRotaryEmbedding(torch.nn.Module):
         
         # Table Llama specific initialization
         self.rope_table_llama = getattr(self.config, "rope_table_llama")
-        period = self.rope_table_llama["channel_period"]
-        x_offset = self.rope_table_llama["x_channel_offset"]
-        y_offset = self.rope_table_llama["y_channel_offset"]
+
+        x_channels_start = self.rope_table_llama["x_channels_start"]
+        x_channels_end = self.rope_table_llama["x_channels_end"]
+        x_channels_step = self.rope_table_llama["x_channels_step"]
+        y_channels_start = self.rope_table_llama["y_channels_start"]
+        y_channels_end = self.rope_table_llama["y_channels_end"]
+        y_channels_step = self.rope_table_llama["y_channels_step"]
         line_length = self.rope_table_llama["line_length"]
         
         if line_length is None:
             # Set a large number to avoid the RoPE effect
             line_length = 10**8
-        
-        if period is None:
-            period = 10**8
-            x_offset = 10**8
-            y_offset = 10**8
+
             
-        if x_offset is None:
-            x_offset = 10**8
-        if y_offset is None:
-            y_offset = 10**8
-        
-        # Get the default rope parameters
-        default_rope_init_fn = ROPE_INIT_FUNCTIONS["default"]
-        default_inv_freq, _ = default_rope_init_fn(self.config, device) # (dim // 2)
-        
-        # Repeat the default_inv_freq for `channel_period` times
-        inv_freq_2d = torch.repeat_interleave(default_inv_freq, period, dim=0) # (dim // 2 * channel_period)
-        # Get the first d//2 elements
-        # TODO: tbd
-        i_offset = 0
-        inv_freq_2d = inv_freq_2d[i_offset:i_offset+inv_freq.shape[0]] # (dim // 2)
-        
-        # Replace inv_freq for every N*channel_period + x_channel_offset elements
-        inv_freq[x_offset::period] = inv_freq_2d[x_offset::period]
-        inv_freq[y_offset::period] = inv_freq_2d[y_offset::period]
+        if x_channels_end is None:
+            x_channels_start = 10**8
+            x_channels_end = 10**8
+            x_channels_step = 10**8
+        else:
+            if x_channels_step is None or x_channels_start is None:
+                raise ValueError("You have set x_channels_end but not x_channels_step or x_channels_start")
+          
+        if y_channels_end is None:
+            y_channels_start = 10**8
+            y_channels_end = 10**8
+            y_channels_step = 10**8
+        else:
+            if y_channels_step is None or y_channels_start is None:
+                raise ValueError("You have set y_channels_end but not y_channels_step or y_channels_start")
 
         self.register_buffer("inv_freq", inv_freq, persistent=False)
         
-        self.num_channels = inv_freq_2d.shape[0]
-        self.period = period
-        self.x_offset = x_offset
-        self.y_offset = y_offset
+        self.num_channels = inv_freq.shape[0]
         self.line_length = line_length
+        self.x_channels_start = x_channels_start
+        self.x_channels_end = x_channels_end
+        self.x_channels_step = x_channels_step
+        self.y_channels_start = y_channels_start
+        self.y_channels_end = y_channels_end
+        self.y_channels_step = y_channels_step
+        
         
         
   
@@ -141,8 +116,15 @@ class TableLlamaRotaryEmbedding(torch.nn.Module):
         y_position_ids = position_ids_expanded // self.line_length
         
         # Replace the position_ids_expanded with x_position_ids and y_position_ids
-        position_ids_expanded[:, self.x_offset::self.period, :] = x_position_ids[:, self.x_offset::self.period, :]
-        position_ids_expanded[:, self.y_offset::self.period, :] = y_position_ids[:, self.y_offset::self.period, :]
+        x_start = self.x_channels_start
+        x_end = self.x_channels_end
+        x_step = self.x_channels_step
+        y_start = self.y_channels_start
+        y_end = self.y_channels_end
+        y_step = self.y_channels_step
+        
+        position_ids_expanded[:, x_start:x_end:x_step, :] = x_position_ids[:, x_start:x_end:x_step, :]
+        position_ids_expanded[:, y_start:y_end:y_step, :] = y_position_ids[:, y_start:y_end:y_step, :]
 
         
         # Force float32 (see https://github.com/huggingface/transformers/pull/29285)

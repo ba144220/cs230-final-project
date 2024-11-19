@@ -7,11 +7,15 @@ class ModelArguments:
     adapter_path: str = field(default="")
     load_in_8bit: bool = field(default=False)
     load_in_4bit: bool = field(default=False)
+    
     # TableLlama arguments
     line_length: int = field(default=None)
-    channel_period: int = field(default=None)
-    x_channel_offset: int = field(default=None)
-    y_channel_offset: int = field(default=None)
+    x_channels_start: int = field(default=None)
+    x_channels_end: int = field(default=None)
+    x_channels_step: int = field(default=None)
+    y_channels_start: int = field(default=None)
+    y_channels_end: int = field(default=None)
+    y_channels_step: int = field(default=None)
 
 @dataclass
 class TrainingArguments:
@@ -26,7 +30,16 @@ class TrainingArguments:
     max_seq_length: int = field(default=1024)
     dry_run: bool = field(default=False)
     
+    # Run ID
+    run_id_prefix: str = field(default="run")
+    
+    # Wandb arguments
+    wandb_entity: str = field(default=None)
     wandb_project: str = field(default=None)
+    
+    # Huggingface arguments
+    hf_organization: str = field(default="cs230-table-llama")
+    push_to_hub: bool = field(default=False)
 
 @dataclass
 class GenerationArguments:
