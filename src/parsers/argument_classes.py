@@ -26,8 +26,16 @@ class TrainingArguments:
     max_seq_length: int = field(default=1024)
     dry_run: bool = field(default=False)
     
+    # Run ID
+    run_id_prefix: str = field(default="run")
+    
+    # Wandb arguments
     wandb_entity: str = field(default=None)
     wandb_project: str = field(default=None)
+    
+    # Huggingface arguments
+    hf_organization: str = field(default="cs230-table-llama")
+    push_to_hub: bool = field(default=False)
 
 @dataclass
 class GenerationArguments:

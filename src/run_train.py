@@ -33,14 +33,14 @@ from callbacks.fixed_wandb_callback import FixedWandbCallback
 # transformers.logging.set_verbosity_info()
 
 
-def generate_run_id(is_dry_run: bool):
+def generate_run_id(training_args: TrainingArguments):
     """
     Generate a run number in the format of run_YYMMDD_HHMMSS
     """
     # Set timezone to Pacific Time
     now = datetime.now(ZoneInfo("US/Pacific"))
     current_time = now.strftime("%y%m%d_%H%M%S")
-    return 'run_{0}'.format(current_time) if not is_dry_run else "dry_run"
+    return f'{training_args.run_id_prefix}_{current_time}' if not training_args.dry_run else "dry_run"
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
         model_args, dataset_args, training_args, peft_args = parser.parse_args_into_dataclasses()
         
     # Wandb setup
-    run_id = generate_run_id(training_args.dry_run)
+    run_id = generate_run_id(training_args)
     if training_args.wandb_entity and training_args.wandb_project:
         wandb.init(
             entity=training_args.wandb_entity,
@@ -167,6 +167,9 @@ def main():
     
     # Copy the sys.argv[1] to the output directory
     shutil.copy(sys.argv[1], os.path.join(sft_config.output_dir, os.path.basename(sys.argv[1])))
+    
+    if training_args.push_to_hub:
+        sft_trainer.push_to_hub(f"{training_args.hf_organization}/{run_id}")
     
 if __name__ == "__main__":
     main()
