@@ -3,6 +3,10 @@ model_name: meta-llama/Llama-3.2-1B-Instruct
 adapter_path: ./outputs/run_20241110_182848
 load_in_4bit: false
 load_in_8bit: true
+line_length: 32
+channel_period: 4
+x_channel_offset: 2
+y_channel_offset: 3
 
 # Dataset arguments
 dataset_root_dir: ./datasets

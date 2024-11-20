@@ -2,10 +2,11 @@
 model_name: meta-llama/Llama-3.2-1B-Instruct
 load_in_4bit: true
 load_in_8bit: false
-line_length: 32
-channel_period: 4
-x_channel_offset: 2
-y_channel_offset: 3
+
+line_length: 64
+channel_period: 32
+x_channel_offset: 0
+# y_channel_offset: 31
 
 # Training arguments
 gradient_accumulation_steps: 4
@@ -13,19 +14,22 @@ batch_size: 1
 num_train_epochs: 1
 save_total_limit: 3
 logging_steps: 10
-eval_steps: 30
-save_steps: 30
-max_seq_length: 1024
+eval_steps: 100
+save_steps: 100
+max_seq_length: 2048
 dry_run: false
 
 # Dataset arguments
 dataset_root_dir: ./datasets
 dataset_names: ["self_generated", "wtq"]
 table_extension: csv
-train_max_samples_for_each_dataset: 80
-val_max_samples_for_each_dataset: 80
-test_max_samples_for_each_dataset: 80
+train_max_samples_for_each_dataset: 1200
+val_max_samples_for_each_dataset: 120
+test_max_samples_for_each_dataset: 120
 shuffle_seed: 42
+
+max_table_row_num: 32
+max_table_width: 64
 
 # Peft arguments
 r: 16

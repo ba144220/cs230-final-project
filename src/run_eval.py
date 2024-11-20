@@ -5,7 +5,6 @@ from tqdm import tqdm
 from transformers import (
     HfArgumentParser, 
     PreTrainedTokenizerFast, 
-    LlamaForCausalLM, 
     BitsAndBytesConfig
 )
 import torch
@@ -13,7 +12,12 @@ from torch.utils.data.dataloader import DataLoader
 
 from parsers.argument_classes import DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments
 from utils.datasets_loader import load_datasets
-from collators.data_collator_for_assistant_completion import DataCollatorForAssistantCompletion
+from collators.data_collator_for_grid_tokenization import DataCollatorForGridTokenization
+
+from models.modeling_table_llama import (
+    TableLlamaConfig,
+    TableLlamaForCausalLM
+)
 
 def main():
     parser = HfArgumentParser((DatasetArguments, ModelArguments, TrainingArguments, GenerationArguments))
@@ -34,10 +38,23 @@ def main():
         bnb_4bit_compute_dtype=torch.bfloat16 if model_args.load_in_4bit else None,
         bnb_4bit_use_double_quant=model_args.load_in_4bit,
     )
-    model = LlamaForCausalLM.from_pretrained(
-        model_args.model_name,
+    # TableLlama
+    table_llama_config = TableLlamaConfig.from_pretrained(model_args.model_name)
+    table_llama_config.rope_table_llama = {
+        "line_length": model_args.line_length,
+        "x_channels_start": model_args.x_channels_start,
+        "x_channels_end": model_args.x_channels_end,
+        "x_channels_step": model_args.x_channels_step,
+        "y_channels_start": model_args.y_channels_start,
+        "y_channels_end": model_args.y_channels_end,
+        "y_channels_step": model_args.y_channels_step,
+    }
+
+    model = TableLlamaForCausalLM.from_pretrained(
+        model_args.model_name, 
         quantization_config=bnb_config if model_args.load_in_4bit or model_args.load_in_8bit else None,
         device_map="auto",
+        config=table_llama_config
     )
     model.generation_config.pad_token_id = tokenizer.pad_token_id
     model.generation_config.eos_token_id = tokenizer.eos_token_id
@@ -46,13 +63,21 @@ def main():
         model.load_adapter(model_args.adapter_path)
     
     # Load datasets
-    datasets = load_datasets(dataset_args)
+    def filter_function(example):
+        if dataset_args.max_table_row_num is not None and example["table_row_num"] > dataset_args.max_table_row_num:
+            return False
+        if dataset_args.max_table_width is not None and example["table_width"] > dataset_args.max_table_width:
+            return False
+        return True
+    datasets = load_datasets(dataset_args, filter_function=filter_function)
     
     # Data collator
-    data_collator = DataCollatorForAssistantCompletion(
+    data_collator = DataCollatorForGridTokenization(
         tokenizer=tokenizer,
         max_seq_length=training_args.max_seq_length,
         is_train=False,
+        is_grid_tokenization=model_args.line_length is not None,
+        line_length=model_args.line_length if model_args.line_length is not None else 64,
     )
     
     # Inference loop
@@ -76,6 +101,7 @@ def main():
                 do_sample=generation_args.do_sample,
                 top_k=generation_args.top_k,
                 top_p=generation_args.top_p,
+                temperature=generation_args.temperature,
                 pad_token_id=tokenizer.eos_token_id
             )
             output_strings = tokenizer.batch_decode(outputs[:, input_length:], skip_special_tokens=False)
@@ -94,34 +120,37 @@ def main():
     print(f"Base model: {model_args.model_name}")
     print(f"Adapter: {model_args.adapter_path}")
     print(f"Total samples: {df.shape[0]}")
+
+    if "self_generated" in dataset_args.dataset_names:
+        
+        # Count accuracy for each task and direction
+        list_item_row_total = df[(df["task"] == "list_items") & (df["direction"] == "row")].shape[0]
+        list_item_col_total = df[(df["task"] == "list_items") & (df["direction"] == "column")].shape[0]
+        arithmetic_row_total = df[(df["task"] == "arithmetic") & (df["direction"] == "row")].shape[0]
+        arithmetic_col_total = df[(df["task"] == "arithmetic") & (df["direction"] == "column")].shape[0]
+        
+        list_item_row_correct = df[(df["task"] == "list_items") & (df["direction"] == "row") & (df["correct"])].shape[0] 
+        list_item_col_correct = df[(df["task"] == "list_items") & (df["direction"] == "column") & (df["correct"])].shape[0] 
+        arithmetic_row_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "row") & (df["correct"])].shape[0] 
+        arithmetic_col_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "column") & (df["correct"])].shape[0] 
+        
+        self_generated_total = list_item_row_total + list_item_col_total + arithmetic_row_total + arithmetic_col_total
+        self_generated_correct = list_item_row_correct + list_item_col_correct + arithmetic_row_correct + arithmetic_col_correct
+        
+        print(f"List item row correct: {list_item_row_correct} / {list_item_row_total} = {list_item_row_correct / list_item_row_total * 100:.2f}%")
+        print(f"List item column correct: {list_item_col_correct} / {list_item_col_total} = {list_item_col_correct / list_item_col_total * 100:.2f}%")
+        print(f"Arithmetic row correct: {arithmetic_row_correct} / {arithmetic_row_total} = {arithmetic_row_correct / arithmetic_row_total * 100:.2f}%")
+        print(f"Arithmetic column correct: {arithmetic_col_correct} / {arithmetic_col_total} = {arithmetic_col_correct / arithmetic_col_total * 100:.2f}%")
+        print(f"Self-generated correct: {self_generated_correct} / {self_generated_total} = {self_generated_correct / self_generated_total * 100:.2f}%")
     
-    # Count accuracy for each task and direction
-    list_item_row_total = df[(df["task"] == "list_items") & (df["direction"] == "row")].shape[0]
-    list_item_col_total = df[(df["task"] == "list_items") & (df["direction"] == "column")].shape[0]
-    arithmetic_row_total = df[(df["task"] == "arithmetic") & (df["direction"] == "row")].shape[0]
-    arithmetic_col_total = df[(df["task"] == "arithmetic") & (df["direction"] == "column")].shape[0]
+    if "wtq" in dataset_args.dataset_names:
+        wtq_total = df[df["task"] == "wtq"].shape[0]
+        wtq_correct = df[(df["task"] == "wtq") & (df["correct"])].shape[0]
+            
+        print(f"WTQ correct: {wtq_correct} / {wtq_total} = {wtq_correct / wtq_total * 100:.2f}%")
     
-    list_item_row_correct = df[(df["task"] == "list_items") & (df["direction"] == "row") & (df["correct"])].shape[0] 
-    list_item_col_correct = df[(df["task"] == "list_items") & (df["direction"] == "column") & (df["correct"])].shape[0] 
-    arithmetic_row_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "row") & (df["correct"])].shape[0] 
-    arithmetic_col_correct = df[(df["task"] == "arithmetic") & (df["direction"] == "column") & (df["correct"])].shape[0] 
-    
-    self_generated_total = list_item_row_total + list_item_col_total + arithmetic_row_total + arithmetic_col_total
-    self_generated_correct = list_item_row_correct + list_item_col_correct + arithmetic_row_correct + arithmetic_col_correct
-    
-    print(f"List item row correct: {list_item_row_correct} / {list_item_row_total} = {list_item_row_correct / list_item_row_total * 100:.2f}%")
-    print(f"List item column correct: {list_item_col_correct} / {list_item_col_total} = {list_item_col_correct / list_item_col_total * 100:.2f}%")
-    print(f"Arithmetic row correct: {arithmetic_row_correct} / {arithmetic_row_total} = {arithmetic_row_correct / arithmetic_row_total * 100:.2f}%")
-    print(f"Arithmetic column correct: {arithmetic_col_correct} / {arithmetic_col_total} = {arithmetic_col_correct / arithmetic_col_total * 100:.2f}%")
-    print(f"Self-generated correct: {self_generated_correct} / {self_generated_total} = {self_generated_correct / self_generated_total * 100:.2f}%")
-    
-    wtq_total = df[df["task"] == "wtq"].shape[0]
-    wtq_correct = df[(df["task"] == "wtq") & (df["correct"])].shape[0]
-    
-    print(f"WTQ correct: {wtq_correct} / {wtq_total} = {wtq_correct / wtq_total * 100:.2f}%")
-    
-    total_correct = self_generated_correct + wtq_correct
-    total_total = self_generated_total + wtq_total
+    total_correct = df["correct"].sum()
+    total_total = df.shape[0]
     
     print(f"Total correct: {total_correct} / {total_total} = {total_correct / total_total * 100:.2f}%")
     
@@ -131,6 +160,8 @@ def main():
     if model_args.adapter_path:
         output_path = os.path.join(model_args.adapter_path, f"predictions.csv")
     else:
+        # Create the output directory if not exists
+        os.makedirs(training_args.output_dir, exist_ok=True)
         output_path = os.path.join(training_args.output_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_predictions.csv")
         
     df.to_csv(output_path, index=False)
