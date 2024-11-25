@@ -1,7 +1,8 @@
 from transformers import (
     AutoTokenizer, 
     AutoModelForSeq2SeqLM,
-    HfArgumentParser
+    HfArgumentParser,
+    BitsAndBytesConfig
 )
 import pandas as pd
 from parsers.argument_classes import (
@@ -42,9 +43,19 @@ def main():
     datasets = load_datasets(dataset_args, filter_function=filter_function)
     # Tapex Tokenizer
     tokenizer = AutoTokenizer.from_pretrained("microsoft/tapex-large-finetuned-wtq")
+
+    bnb_config = BitsAndBytesConfig(
+        load_in_4bit=model_args.load_in_4bit,
+        load_in_8bit=model_args.load_in_8bit,
+        bnb_4bit_compute_dtype=torch.bfloat16 if model_args.load_in_4bit else None,
+        bnb_4bit_use_double_quant=model_args.load_in_4bit,
+    )
     
     # Model
-    model = AutoModelForSeq2SeqLM.from_pretrained("microsoft/tapex-large-finetuned-wtq")
+    model = AutoModelForSeq2SeqLM.from_pretrained("microsoft/tapex-large-finetuned-wtq",
+        quantization_config=bnb_config if model_args.load_in_4bit or model_args.load_in_8bit else None,
+        device_map="auto"
+    )
             
     # Inference loop
     pred_dataloader = DataLoader(
@@ -74,12 +85,12 @@ def main():
     df["raw_predictions"] = predictions
     
     def clean_predictions(predictions):
-        return [pred.replace("<|eot_id|>", "").replace("Answer:", "").strip() for pred in predictions]
+        return [pred.replace("<s>", "").replace("</s>", "").replace("<pad>","").replace("Answer:", "").strip() for pred in predictions]
     
     df["predictions"] = clean_predictions(df["raw_predictions"])
     df["correct"] = df["answer"] == df["predictions"]
     
-    print(f"Base model: {model_args.model_name}")
+    print(f"Base model: microsoft/tapex-large-finetuned-wtq")
     print(f"Adapter: {model_args.adapter_path}")
     print(f"Total samples: {df.shape[0]}")
 
