@@ -17,6 +17,10 @@ class ModelArguments:
     y_channels_end: int = field(default=None)
     y_channels_step: int = field(default=None)
 
+    # Temp for eval analysis
+    set_channel_zero: bool = field(default=False)
+    add_channel_noise: bool = field(default=False)
+
 @dataclass
 class TrainingArguments:
     output_dir: str = field(default="./outputs")
