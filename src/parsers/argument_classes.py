@@ -30,6 +30,11 @@ class TrainingArguments:
     max_seq_length: int = field(default=1024)
     dry_run: bool = field(default=False)
     
+    # Learning rate arguments
+    learning_rate: float = field(default=5e-5)
+    lr_scheduler_type: str = field(default="linear")
+    warmup_ratio: float = field(default=0.05)
+    
     # Run ID
     run_id_prefix: str = field(default="run")
     

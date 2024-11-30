@@ -17,8 +17,6 @@ from transformers.integrations.integration_utils import WandbCallback
 from peft import LoraConfig
 from trl import SFTConfig, SFTTrainer
 
-import transformers
-
 from collators.data_collator_for_grid_tokenization import DataCollatorForGridTokenization
 from parsers.argument_classes import ModelArguments, DatasetArguments, TrainingArguments, PeftArguments
 from utils.datasets_loader import load_datasets
@@ -28,10 +26,6 @@ from models.modeling_table_llama import (
 )
 
 from callbacks.fixed_wandb_callback import FixedWandbCallback
-
-
-# transformers.logging.set_verbosity_info()
-
 
 def generate_run_id(training_args: TrainingArguments):
     """
@@ -131,6 +125,11 @@ def main():
         save_strategy="steps",
         save_steps=training_args.save_steps,
         logging_steps=training_args.logging_steps,
+        
+        # Learning rate arguments
+        learning_rate=training_args.learning_rate,
+        lr_scheduler_type=training_args.lr_scheduler_type,
+        warmup_ratio=training_args.warmup_ratio,
         
         remove_unused_columns=False,
         
