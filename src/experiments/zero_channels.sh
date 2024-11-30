@@ -4,7 +4,9 @@ for channel_id in ${channel_ids[@]}; do
     echo "Running eval for channel ${channel_id}"
     python3 src/experiments/run_eval.py \
         --model_name meta-llama/Llama-3.2-1B-Instruct \
-        --output_dir ./outputs/zero_channels/llama_1b_zero-channel_${channel_id} \
+        --adapter_path /work/cs230-shared/outputs/small_1b_64l \
+        --output_dir ./outputs/zero_channels/llama_1b_64l_zero-channel_${channel_id} \
+        --line_length 64 \
         --x_channels_start ${channel_id} \
         --x_channels_end 10000000 \
         --x_channels_step 10000000 \
