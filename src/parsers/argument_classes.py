@@ -70,3 +70,8 @@ class PeftArguments:
     lora_dropout: int = field(default=0.05)
     bias:str = field(default="none")
     task_type:str = field(default="CAUSAL_LM")
+    
+@dataclass
+class ExperimentArguments:
+    noise_level: float = field(default=0.0)
+
