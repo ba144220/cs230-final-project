@@ -1,130 +1,227 @@
-# cs230-final-project
+# 2D-Aware LLMs: Improving Table Question Answering with 2D Positional Encoding
 
-For the following instructions, `mamba` and `conda` are interchangeable. `mamba` is recommended.
+## Table of Contents
 
-# Environment
-## First Time Setup
-1. Create the environment:
-```bash
-mamba env create -f environment.yaml
-```
-2. Activate the environment:
-```bash
-mamba activate cs230
-```
-If you want to deactivate the environment, run `mamba deactivate`.
+- [Introduction](#introduction)
+- [Installation](#installation)
+- [Dataset](#dataset)
+- [Modeling](#modeling)
+- [Usage](#usage)
+- [Contact](#contact)
 
-3. Create a `.env` file based on `.env.example` and put your environment variables in it.
+## Introduction
 
-## Development
-Before developing, you should activate the environment:
-```bash
-mamba activate cs230
-```
-You can deactivate the environment by running `mamba deactivate`.
+![Model Pipeline](/cs230-final-project/img/model_pipeline.png)
 
-## Installing New Packages
+*Figure 1: Overview of the model pipeline.*
 
-1. Add the package to `environment.yaml` and run
-```bash
-mamba env update -f environment.yaml
-```
-If you use `pip` to install packages, add them to `environment.yaml` under `pip` section.
-**YOU SHOULD NOT INSTALL NEW PACKAGES DIRECTLY THROUGH `conda`, `mamba`, or `pip`.**
+We introduced a new approach to positional encoding by integrating vertical positional information using a 2D Positional Encoding (2DPE) framework. This enhancement is designed to improve large language models' (LLMs) ability to develop two-dimensional positional awareness, enabling them to better handle structured data and complex document formats. Our experiments involved incorporating the 2DPE mechanism into the Rotary Positional Embedding (RoPE) layer of the 1B and 3B parameter versions of the Llama 3.2 Instruction models. These experiments highlight both the limitations and the potential of this method in improving LLMs' vertical positional awareness. 
 
+## Installation
 
-# Conventions
+For the following instructions, `mamba` and `conda` are interchangeable. **`mamba` is recommended.**
 
-## Commit Messages
+### First-Time Setup
 
-Use the following format for commit messages:
-```
-<type>: <description>
-```
-The type could be one of the following:
-- `fix`: A bug fix
-- `docs`: Changes to the documentation
-- `style`: Formatting, missing semi colons, etc; no code changes
-- `chore`: Updating build configuration, development scripts, etc.
-- `experiment`: Experimenting with the codebase
-- `modeling`: Changes to the modeling codebase
-- `dataset`: Changes to the dataset codebase
+1. **Create the environment:**
 
-## Branching
+    ```bash
+    mamba env create -f environment.yaml
+    ```
 
-Branch name should be in the following format: `<type>/description-of-the-branch`
+2. **Activate the environment:**
 
-For the type, we use the following naming convention:
-- `main`: The main branch is the production branch.
-- `dev`: The development branch is the branch where the development happens.
-- `experiment/`: The experiment branch is the branch where the new experiment development happens.
-- `modeling/`: The modeling branch is the branch where the new modeling code development happens.
+    ```bash
+    mamba activate cs230
+    ```
 
-## File/Folder Naming Conventions
-* `all_lowercase_with_underline`
-* Put production code in `src/`
-* Do experiments in `notebooks/`
+    To deactivate the environment, run:
 
-## Variable Naming Conventions
-* Functions
-    * `all_lowercase_with_underline`
-* Classes
-    * `CamelCase`
+    ```bash
+    mamba deactivate
+    ```
 
+3. **Create a `.env` file:**
 
+    - Use `.env.example` as a template.
+    - Add your environment variables to the new `.env` file.
 
+### Installing New Packages
 
+1. **Add the package to `environment.yaml`** and run:
 
-# Dataset
-## Dataset File Structure
-* Store datasets at `./datasets`
-* For splits, add `_train` or `_test` at the end of the folder name.
-* File structure
-    * A `qa.csv` file contain all the questions and their corresponding context and answer
-        * question: str
-        * answer: str
-        * context: str (only the name of the table)
-        * id: unique str
-        * task: optional enum (“arithmetic” and “list-item”)
-        * direction: optional enum (“row” or “col”)
-        * size: optional tuple[int] 
-    * A folder name `tables` that contains .csv, .html, and .table file of the table.
-## Data Class
-* Data class: `TableDataset`
-    * Simple 
-        * Output format can be on of .csv, .html, and .table
-        * Output: `List[string]`
-    * Hard
-        * Output format can be on of .csv, .html, .table, 2D
-        * Output: `Tensor` (num_of_samples, longest length)
+    ```bash
+    mamba env update -f environment.yaml
+    ```
 
-## Self-generated Dataset Specifications
-### General
-#### Dataset Size
-* Test set: TBD
-* Train set: TBD
-#### Table Sizes
-All tables are N*N, N=4,6,8,10,12
+    - If you use `pip` to install packages, add them to the `pip` section in `environment.yaml`.
+    - **Do not install new packages directly through `conda`, `mamba`, or `pip`.**
 
-#### Number of Questions
-For each table, generate 4 questions for rows and columns. (Total 8 questions per table)
+## Dataset
 
-### Arithmetic Task
-* Range of numbers: 1-10
-* For arithmetic, just do min and max.
+### Overview
 
-### Item-Listing Task
-* Range of letters: A-Z
-* Answers are separated by commas.
-    * e.g. A, B, C, D
+We utilized the [WikiTableQuestions dataset](https://github.com/ppasupat/WikiTableQuestions.git) for our experiments. We performed preprocessing and filtering on the original dataset to tailor it to our needs.
 
+- **Training Set:** 14,149 samples
+- **Evaluation Set:** 3,515 samples
+- **Test Set:** 4,344 samples
 
-# Modeling
+### Dataset File Structure
 
-Here is the modules hierarchy of the Llama 3.2 model:
-```Mermaid
+- **`csv/`**  
+  Contains all context tables for question answering in `.csv` format. We have also included the `.html` and `.table` formats for additional flexibility.
+
+- **`data/`**
+  - `train.csv`
+  - `eval.csv`
+  - `test.csv`
+  
+  Each `*.csv` file contains all the questions along with their corresponding context and answers. The structure of these files is as follows:
+
+  - **Columns:**
+    - `question` (*str*): The text of the question.
+    - `answer` (*str*): The answer to the question.
+    - `context` (*str*): The name of the table associated with the question.
+    - `id` (*str*): A unique identifier for each entry.
+    - `task` (*enum, optional*): Specifies the type of task; either `"arithmetic"` or `"list-item"`.
+    - `direction` (*enum, optional*): Indicates the orientation; either `"row"` or `"col"`.
+    - `table_row_num` (*int, optional*): The number of rows in the table.
+    - `table_width` (*int, optional*): The number of columns in the table.
+
+### Downloading the Dataset
+
+You can obtain the dataset by downloading it directly from the source:
+
+- **Direct Download:** [Download Link](https://drive.google.com/file/d/1pCd0RpDdYDEOj9sUWZT6er5B8xb6JkHa/view?usp=sharing)
+
+### Dataset Processing
+
+- **Utils: `DatasetsLoader`**  
+  This utility method is used to load the dataset from the CSV files.
+
+- **Data Class: `DataCollatorForGridTokenization`**  
+  After loading the dataset, we use this class to perform grid tokenization and collate the data into batches. This process is essential for preparing the data in a format suitable for training our models.
+
+## Modeling
+
+In this section, we illustrate the architecture of our model, highlighting how the 2D Positional Encoding (2DPE) is integrated into the RoPE layer of the Llama 3.2 models.
+
+### Modules Hierarchy
+
+Below is the hierarchy of modules in the Llama 3.2 model:
+
+```mermaid
 flowchart TD
     LlamaForCausalLM --> LlamaModel
-    LlamaModel --> LlamaDecoderLayer
-    LlamaDecoderLayer --> LlamaAttention
+    LlamaModel --> LlamaRotaryEmbedding
 ```
+
+Based on the above hierarchy, we created a few new classes to integrate the 2DPE mechanism effectively.
+
+### `TableLlamaConfig`
+  We introduced a custom configuration class, TableLlamaConfig, which inherits from LlamaConfig. This class adds a new parameter rope_table_llama to specify the settings for our 2DPE mechanism. It allows customization of the 2D positional encoding parameters, such as line length and channel indices for the x (horizontal) and y (vertical) dimensions.
+
+```python
+class TableLlamaConfig(LlamaConfig):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        rope_table_llama = kwargs.pop("rope_table_llama", None)
+        if rope_table_llama is None:
+            self.rope_table_llama = {
+                "line_length": None,
+                "x_channels_start": None,
+                "x_channels_end": None,
+                "x_channels_step": None,
+                "y_channels_start": None,
+                "y_channels_end": None,
+                "y_channels_step": None,
+            }
+        else:
+            self.rope_table_llama = rope_table_llama
+```
+
+### `TableLlamaRotaryEmbedding`
+We created a new class, TableLlamaRotaryEmbedding, that extends the standard rotary positional embedding to include vertical positional information. By modifying the position IDs and frequencies, the model can now encode both horizontal and vertical positions.
+
+```python
+class TableLlamaRotaryEmbedding(torch.nn.Module):
+    def __init__(self, config: TableLlamaConfig, device=None):
+        super().__init__()
+        # Initialization code...
+
+    @torch.no_grad()
+    def forward(self, x, position_ids):
+        # Compute x and y position IDs
+        # Apply rotary embeddings for both dimensions
+        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
+```
+
+- **Key Features:**
+  - 2D Position IDs: Separates position IDs into x and y components based on the token positions in the sequence.
+  - Frequency Adjustments: Adjusts inverse frequencies to account for two-dimensional positions.
+  - Rotary Embedding Application: Applies rotary embeddings to both x and y positions, enhancing the model's spatial understanding.
+
+### `TableLlamaModel`
+We created TableLlamaModel by extending LlamaModel and integrating our custom rotary embedding.
+
+``` python
+class TableLlamaModel(LlamaModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.rotary_emb = TableLlamaRotaryEmbedding(config)
+```
+
+### `TableLlamaForCausalLM`
+Similarly, we extended LlamaForCausalLM to create TableLlamaForCausalLM, which uses our customized model.
+
+```python
+class TableLlamaForCausalLM(LlamaForCausalLM):
+    def __init__(self, config: TableLlamaConfig):
+        super().__init__(config)
+        self.model = TableLlamaModel(config)
+```
+
+## Usage
+
+The `run_*.sh` scripts are used to train and evaluate the TableLlama model with the desired configurations. Make sure you have set up the environment and dependencies as described in the [Installation](#installation) section before running the scripts.
+
+### Running the Training
+First, check the scripts/train_config.yaml file to make sure the configurations are correct.
+
+To start training, run:
+
+```bash
+bash run_train.sh
+```
+
+### Running the Evaluation
+First, check the `scripts/eval_config.yaml` file to make sure the configurations are correct.
+
+To start evaluation, run:
+
+```bash
+bash run_eval.sh
+```
+
+### Training Environment
+The `scripts/*_config.yaml` files contain the configurations for training and evaluation scripts.
+The scripts are set up to be run on AWS G6e instances, equipped with an Nvidia L40S GPU with 48 GB of memory.
+
+#### Environment Activation
+Make sure to activate the correct environment before running the script:
+
+```bash
+mamba activate cs230
+```
+
+#### Training Logs
+The training logs will be saved in the `outputs/` directory by default. You can monitor the progress there. 
+
+## Contact
+For any questions or feedback, feel free to contact us:
+
+Email: 
+yuchihsu@stanford.edu,
+jziyi@stanford.edu,
+yejuahn@stanford.edu
