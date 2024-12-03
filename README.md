@@ -11,7 +11,7 @@
 
 ## Introduction
 
-![Model Pipeline](/cs230-final-project/img/model_pipeline.png)
+![Model Pipeline](img/model_pipeline.png)
 
 *Figure 1: Overview of the model pipeline.*
 
