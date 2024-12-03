@@ -101,7 +101,20 @@ You can obtain the dataset by downloading it directly from the source:
   This utility method is used to load the dataset from the CSV files.
 
 - **Data Class: `DataCollatorForGridTokenization`**  
-  After loading the dataset, we use this class to perform grid tokenization and collate the data into batches. This process is essential for preparing the data in a format suitable for training our models.
+  After loading the dataset, we use this class to perform grid tokenization and collate the data into batches. This process is essential for preparing the data in a format suitable for training our models. 
+
+  **Key Features:**
+  - Tokenization for Structured Data: The class provides methods for converting a CSV-like structure into a sequence of token IDs while preserving its layout.
+  - Grid Tokenization and Padding: The data is processed in a grid-like format, with padding to align tokenized rows and columns, improving the model's ability to understand data in a tabular form.
+  - Training and Evaluation Modes: The class can switch between training and evaluation modes, providing flexibility for processing input differently in each stage.
+  - Batching: The class can batch the data into smaller, more manageable chunks, which is useful for training deep learning models.
+
+  **Overview of Main Methods**
+  - `_grid_tokenize_string`: Converts input strings to a list of token IDs, adding padding where necessary to fit the grid structure.
+  - `_grid_tokenize_table`: Converts tables into tokenized rows and columns, with each cell aligned properly to fit into a consistent grid structure.
+
+
+  
 
 ## Modeling
 
