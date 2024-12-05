@@ -107,7 +107,7 @@ You can obtain the dataset by downloading it directly from the source:
   - Tokenization for Structured Data: The class provides methods for converting a CSV-like structure into a sequence of token IDs while preserving its layout.
   - Grid Tokenization and Padding: The data is processed in a grid-like format, with padding to align tokenized rows and columns, improving the model's ability to understand data in a tabular form.
   - Training and Evaluation Modes: The class can switch between training and evaluation modes, providing flexibility for processing input differently in each stage.
-  - Batching: The class can batch the data into smaller, more manageable chunks, which is useful for training deep learning models.
+  - Batching: For samples in the same mini-batch, we further pad them to match the length of the longest sequence in the mini-batch, ensuring that tensors can be generated.
 
   **Overview of Main Methods**
   - `_grid_tokenize_string`: Converts input strings to a list of token IDs, adding padding where necessary to fit the grid structure.
@@ -217,8 +217,8 @@ To start evaluation, run:
 bash run_eval.sh
 ```
 
-### Training Environment
-The `scripts/*_config.yaml` files contain the configurations for training and evaluation scripts.
+### Training Configurations
+The `scripts/*_config.yaml` or `scripts/*.4080.yaml` files contain the configurations for training and evaluation scripts.
 The scripts are set up to be run on AWS G6e instances, equipped with an Nvidia L40S GPU with 48 GB of memory.
 
 #### Environment Activation
